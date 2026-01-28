@@ -38,6 +38,7 @@ export default function DashboardPage() {
     if (!user) return;
     
     async function loadData() {
+        if (!user) return;
         try {
             const [fetchedProducts, fetchedInvoices, fetchedCustomers, fetchedPayments] = await Promise.all([
                 firestoreService.getProducts(user.uid),

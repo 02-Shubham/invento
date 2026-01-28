@@ -4,19 +4,19 @@ import { useState, useRef, useEffect } from "react";
 import { useAuth } from "@/lib/auth-context";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
-import { Send, Loader2, Bot, AlertTriangle, Sparkles, X } from "lucide-react";
+import { Send, Loader2, Bot, AlertTriangle, Sparkles, X, Wrench } from "lucide-react";
 import Link from "next/link";
-import { toast } from "sonner";
+import { Badge } from "@/components/ui/badge";
 
 interface Message {
   id: string;
-  role: "user" | "assistant";
+  role: "user" | "assistant" | "tool";
   content: string;
   timestamp: Date;
+  toolsUsed?: string[];
+  toolResults?: any;
 }
 
 interface AIChatWidgetProps {
@@ -65,7 +65,10 @@ export default function AIChatWidget({ isOpen, onClose }: AIChatWidgetProps) {
     try {
       const response = await fetch("/api/ai/chat", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { 
+            "Content-Type": "application/json",
+            "x-user-id": user?.uid || "" // Pass user ID for API helper
+        },
         body: JSON.stringify({
           message: userMessage.content,
           conversationHistory: messages.map(m => ({ role: m.role, content: m.content }))
@@ -81,23 +84,26 @@ export default function AIChatWidget({ isOpen, onClose }: AIChatWidgetProps) {
       const aiMessage: Message = {
         id: generateId(),
         role: "assistant",
-        content: data.data?.response || data.response, // Handle standardized wrapper or direct
-        timestamp: new Date()
+        content: data.response || data.data?.response, // Handle standardized wrapper or direct
+        timestamp: new Date(),
+        toolsUsed: data.toolsUsed || []
       };
 
       setMessages(prev => [...prev, aiMessage]);
     } catch (err: any) {
       console.error("Chat error:", err);
-      let errorMsg = "Something went wrong. Please try again.";
+      let errorMsg = err.message || "Something went wrong. Please try again.";
       let type = "general";
       
       if (err.message.includes("API key")) {
-          errorMsg = err.message;
+          // Keep specific message but set type for UI action
           type = "api_key";
+      } else if (err.message.includes("RATE_LIMIT") || err.message.includes("quota")) {
+          errorMsg = "OpenAI Rate Limit Exceeded. Please check your usage/billing.";
+          type = "rate_limit";
       }
       
       setError({ message: errorMsg, type });
-      // Remove failed user message? No, keep it so they can retry copy-paste
     } finally {
       setLoading(false);
     }
@@ -118,9 +124,6 @@ export default function AIChatWidget({ isOpen, onClose }: AIChatWidgetProps) {
 
   const handlePromptClick = (prompt: string) => {
       setInput(prompt);
-      // Optional: Auto send?
-      // sendMessage(); 
-      // Better to let user review/send
   };
 
   return (
@@ -185,12 +188,26 @@ export default function AIChatWidget({ isOpen, onClose }: AIChatWidgetProps) {
                             </Avatar>
                         )}
                         
-                        <div className={`p-3 rounded-2xl text-sm whitespace-pre-wrap ${
-                            msg.role === 'user' 
-                                ? 'bg-black text-white rounded-tr-sm' 
-                                : 'bg-neutral-100 text-neutral-800 rounded-tl-sm'
-                        }`}>
-                            {msg.content}
+                        <div>
+                            <div className={`p-3 rounded-2xl text-sm whitespace-pre-wrap ${
+                                msg.role === 'user' 
+                                    ? 'bg-black text-white rounded-tr-sm' 
+                                    : 'bg-neutral-100 text-neutral-800 rounded-tl-sm'
+                            }`}>
+                                {msg.content}
+                            </div>
+                            
+                            {/* Tool Usage Display */}
+                            {msg.role === 'assistant' && msg.toolsUsed && msg.toolsUsed.length > 0 && (
+                                <div className="mt-2 flex flex-wrap gap-2">
+                                    {msg.toolsUsed.map((tool, idx) => (
+                                        <Badge key={idx} variant="secondary" className="text-[10px] bg-blue-50 text-blue-700 border-blue-100 px-2 py-0.5 h-5 font-normal flex items-center gap-1">
+                                            <Wrench className="h-3 w-3" />
+                                            Used: {tool.replace('_', ' ')}
+                                        </Badge>
+                                    ))}
+                                </div>
+                            )}
                         </div>
                     </div>
                 </div>
@@ -203,6 +220,7 @@ export default function AIChatWidget({ isOpen, onClose }: AIChatWidgetProps) {
                             <AvatarFallback className="bg-neutral-100 text-neutral-500"><Bot className="h-4 w-4" /></AvatarFallback>
                         </Avatar>
                         <div className="bg-neutral-50 p-3 rounded-2xl rounded-tl-sm flex items-center gap-1">
+                            {/* Assuming we might know if tools are being used via streaming later, but for now just showing activity */}
                              <div className="w-1.5 h-1.5 bg-neutral-400 rounded-full animate-bounce [animation-delay:-0.3s]"></div>
                              <div className="w-1.5 h-1.5 bg-neutral-400 rounded-full animate-bounce [animation-delay:-0.15s]"></div>
                              <div className="w-1.5 h-1.5 bg-neutral-400 rounded-full animate-bounce"></div>

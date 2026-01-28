@@ -184,7 +184,7 @@ export interface Supplier {
 export interface UserSettings {
   id?: string;
   userId: string;
-  aiProvider: 'openai' | 'anthropic' | 'google';
+  aiProvider: 'openai' | 'google';
   aiApiKey?: string;
   aiApiKeySet?: boolean; // UI flag
   aiKeyLastUpdated?: Date;
