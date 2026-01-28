@@ -737,6 +737,34 @@ export const firestoreService = {
         throw new Error("Unauthorized");
       }
       await updateDoc(docRef, { ...updates, updatedAt: serverTimestamp() });
+  },
+
+  // --- User Settings ---
+  async getUserSettings(userId: string) {
+    try {
+        const docRef = doc(db, "user_settings", userId);
+        const docSnap = await getDoc(docRef);
+        if (docSnap.exists()) {
+             return { id: docSnap.id, ...docSnap.data() }; 
+        }
+        return null;
+    } catch (error) {
+        console.error("Error getting user settings:", error);
+        throw error;
+    }
+  },
+
+  async updateUserSettings(userId: string, settings: any) {
+     try {
+         const docRef = doc(db, "user_settings", userId);
+         // efficient update or set merge
+         await import("firebase/firestore").then(({ setDoc }) => 
+            setDoc(docRef, { ...settings, userId, updatedAt: serverTimestamp() }, { merge: true })
+         );
+     } catch (error) {
+         console.error("Error updating user settings:", error);
+         throw error;
+     }
   }
 
 };

@@ -178,3 +178,16 @@ export interface Supplier {
     createdAt?: Date;
     updatedAt?: Date;
 }
+
+// --- AI User Settings ---
+
+export interface UserSettings {
+  id?: string;
+  userId: string;
+  aiProvider: 'openai' | 'anthropic' | 'google';
+  aiApiKey?: string;
+  aiApiKeySet?: boolean; // UI flag
+  aiKeyLastUpdated?: Date;
+  aiModel?: string;
+  updatedAt?: Date;
+}

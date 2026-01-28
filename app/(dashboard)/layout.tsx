@@ -3,6 +3,7 @@
 import { ProtectedRoute } from "@/components/auth/protected-route";
 import { AppSidebar } from "@/components/layout/AppSidebar";
 import { TopNavbar } from "@/components/layout/TopNavbar";
+import AIChatOverview from "@/components/ai/ai-chat-overview";
 
 export default function DashboardLayout({
   children,
@@ -23,6 +24,7 @@ export default function DashboardLayout({
             {children}
           </main>
         </div>
+        <AIChatOverview />
       </div>
     </ProtectedRoute>
   );

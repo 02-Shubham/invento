@@ -1,376 +1,243 @@
 "use client";
 
-import { useState, useEffect } from "react";
 import { useAuth } from "@/lib/auth-context";
-import { Button } from "@/components/ui/button";
+import { useEffect, useState } from "react";
+import { firestoreService } from "@/lib/firestore-service";
+import { UserSettings } from "@/types";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import {
-  Tabs,
-  TabsContent,
-  TabsList,
-  TabsTrigger,
-} from "@/components/ui/tabs";
-import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Loader2, Eye, EyeOff, ExternalLink, CheckCircle2, AlertCircle } from "lucide-react";
-import { doc, getDoc, setDoc, serverTimestamp } from "firebase/firestore";
-import { db } from "@/lib/firebase";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { Loader2, Check, Key, ExternalLink } from "lucide-react";
 import { toast } from "sonner";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import Link from "next/link";
 
-type AIProvider = "anthropic" | "openai" | "google" | null;
-
-export default function APIKeysSettingsPage() {
+export default function ApiKeysPage() {
   const { user } = useAuth();
-  const [isLoading, setIsLoading] = useState(true);
-  const [isSaving, setIsSaving] = useState(false);
-  const [selectedProvider, setSelectedProvider] = useState<AIProvider>(null);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
   const [apiKey, setApiKey] = useState("");
-  const [showKey, setShowKey] = useState(false);
-  const [hasKey, setHasKey] = useState(false);
-  const [currentProvider, setCurrentProvider] = useState<AIProvider>(null);
+  const [provider, setProvider] = useState<"openai" | "anthropic" | "google">("anthropic");
+  const [isKeySet, setIsKeySet] = useState(false);
+  const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
 
   useEffect(() => {
     async function loadSettings() {
       if (!user) return;
-
       try {
-        const userSettingsRef = doc(db, "user_settings", user.uid);
-        const userSettingsSnap = await getDoc(userSettingsRef);
-
-        if (userSettingsSnap.exists()) {
-          const data = userSettingsSnap.data();
-          setCurrentProvider(data.aiProvider || null);
-          setSelectedProvider(data.aiProvider || null);
-          setHasKey(data.aiApiKeySet || false);
-          // Don't load the actual key for security
+        setLoading(true);
+        const settings = await firestoreService.getUserSettings(user.uid) as UserSettings;
+        if (settings) {
+          if (settings.aiProvider) setProvider(settings.aiProvider);
+          if (settings.aiApiKeySet) setIsKeySet(true);
+          if (settings.aiKeyLastUpdated) {
+            // Handle Timestamp conversion if coming from firestore raw
+            const date = settings.aiKeyLastUpdated instanceof Date 
+                ? settings.aiKeyLastUpdated 
+                : (settings.aiKeyLastUpdated as any).toDate();
+            setLastUpdated(date);
+          }
         }
       } catch (error) {
-        console.error("Error loading settings:", error);
-        toast.error("Failed to load API key settings");
+        console.error("Failed to load settings:", error);
+        toast.error("Failed to load settings");
       } finally {
-        setIsLoading(false);
+        setLoading(false);
       }
     }
-
     loadSettings();
   }, [user]);
 
   const handleSave = async () => {
-    if (!user || !selectedProvider || !apiKey.trim()) {
-      toast.error("Please select a provider and enter an API key");
+    if (!user) return;
+    
+    // If key is set (masked) and user didn't change it (apiKey is empty), just save provider change
+    if (isKeySet && !apiKey) {
+         setSaving(true);
+         try {
+            await firestoreService.updateUserSettings(user.uid, {
+                aiProvider: provider,
+                aiModel: provider === 'anthropic' ? 'claude-3-5-sonnet-20240620' : 'gpt-4-turbo'
+            });
+            toast.success("Provider updated successfully");
+         } catch(error) {
+             toast.error("Failed to update provider");
+         } finally {
+             setSaving(false);
+         }
+         return;
+    }
+
+    if (!apiKey) {
+      toast.error("Please enter an API key");
       return;
     }
 
-    setIsSaving(true);
-    try {
-      const userSettingsRef = doc(db, "user_settings", user.uid);
-      await setDoc(
-        userSettingsRef,
-        {
-          aiProvider: selectedProvider,
-          aiApiKey: apiKey.trim(), // TODO: Encrypt this in production
-          aiApiKeySet: true,
-          aiKeyLastUpdated: serverTimestamp(),
-          updatedAt: serverTimestamp(),
-        },
-        { merge: true }
-      );
+    // Basic validation
+    if (provider === 'anthropic' && !apiKey.startsWith('sk-ant')) {
+         toast.error("Invalid Anthropic API key format (should start with sk-ant)");
+         return;
+    }
+    if (provider === 'openai' && !apiKey.startsWith('sk-')) {
+         toast.error("Invalid OpenAI API key format (should start with sk-)");
+         return;
+    }
 
-      setCurrentProvider(selectedProvider);
-      setHasKey(true);
-      setApiKey(""); // Clear input after saving
-      toast.success("API key saved successfully");
+    setSaving(true);
+    try {
+      await firestoreService.updateUserSettings(user.uid, {
+        aiProvider: provider,
+        aiApiKey: apiKey,
+        aiApiKeySet: true,
+        aiKeyLastUpdated: new Date(),
+        aiModel: provider === 'anthropic' ? 'claude-3-5-sonnet-20240620' : 'gpt-4-turbo'
+      });
+      setIsKeySet(true);
+      setApiKey(""); // Clear input for security
+      setLastUpdated(new Date());
+      toast.success("API Key saved successfully");
     } catch (error) {
-      console.error("Error saving API key:", error);
+      console.error("Failed to save settings:", error);
       toast.error("Failed to save API key");
     } finally {
-      setIsSaving(false);
+      setSaving(false);
     }
   };
 
-  const handleChangeKey = () => {
-    setApiKey("");
-    setShowKey(false);
-  };
-
-  if (isLoading) {
-    return (
-      <div className="flex items-center justify-center min-h-[400px]">
-        <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
-      </div>
-    );
+  if (loading) {
+      return <div className="flex justify-center p-8"><Loader2 className="animate-spin" /></div>;
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 max-w-2xl">
+      <div>
+        <h3 className="text-lg font-medium">AI Integration</h3>
+        <p className="text-sm text-neutral-500">
+          Configure your AI provider to enable smart assistants.
+        </p>
+      </div>
+      
       <Card>
         <CardHeader>
-          <CardTitle>AI API Keys</CardTitle>
+          <CardTitle>API Configuration</CardTitle>
           <CardDescription>
-            Add your API keys for AI features. Your keys are stored securely and you pay for usage directly to the provider.
+            Choose your preferred AI provider and enter your API key. Keys are stored securely.
           </CardDescription>
         </CardHeader>
-        <CardContent>
-          <Alert className="mb-6">
-            <AlertCircle className="h-4 w-4" />
-            <AlertDescription>
-              <strong>Security Note:</strong> Your API key is stored securely. You pay for AI usage directly to the provider. 
-              Never share your API keys with anyone.
-            </AlertDescription>
-          </Alert>
-
-          <Tabs
-            value={selectedProvider || "none"}
-            onValueChange={(value) =>
-              setSelectedProvider(
-                value === "none" ? null : (value as AIProvider)
-              )
-            }
-            className="w-full"
-          >
-            <TabsList className="grid w-full grid-cols-3">
-              <TabsTrigger value="anthropic">Anthropic</TabsTrigger>
-              <TabsTrigger value="openai">OpenAI</TabsTrigger>
-              <TabsTrigger value="google">Google</TabsTrigger>
-            </TabsList>
-
-            <TabsContent value="anthropic" className="space-y-4 mt-6">
-              <div className="space-y-2">
-                <div className="flex items-center justify-between">
-                  <Label htmlFor="anthropic-key">Anthropic API Key</Label>
-                  {currentProvider === "anthropic" && hasKey && (
-                    <div className="flex items-center gap-2">
-                      <CheckCircle2 className="h-4 w-4 text-green-600" />
-                      <span className="text-sm text-green-600">Key configured</span>
-                    </div>
-                  )}
-                </div>
-                {hasKey && currentProvider === "anthropic" ? (
-                  <div className="space-y-2">
-                    <div className="flex items-center gap-2">
-                      <Input
-                        type={showKey ? "text" : "password"}
-                        value={showKey ? "sk-ant-••••••••••••••" : "••••••••••••••"}
-                        disabled
-                        className="font-mono"
-                      />
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="icon"
-                        onClick={() => setShowKey(!showKey)}
-                      >
-                        {showKey ? (
-                          <EyeOff className="h-4 w-4" />
-                        ) : (
-                          <Eye className="h-4 w-4" />
-                        )}
-                      </Button>
-                    </div>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      onClick={handleChangeKey}
-                    >
-                      Change Key
-                    </Button>
-                  </div>
-                ) : (
-                  <>
-                    <Input
-                      id="anthropic-key"
-                      type="password"
-                      placeholder="sk-ant-..."
-                      value={apiKey}
-                      onChange={(e) => setApiKey(e.target.value)}
-                      className="font-mono"
-                    />
-                    <p className="text-sm text-gray-500">
-                      Get your API key from{" "}
-                      <a
-                        href="https://console.anthropic.com/settings/keys"
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-blue-600 hover:underline inline-flex items-center gap-1"
-                      >
-                        Anthropic Console
-                        <ExternalLink className="h-3 w-3" />
-                      </a>
-                    </p>
-                    <p className="text-xs text-gray-400">
-                      Pricing: ~$3 per 1M input tokens, $15 per 1M output tokens
-                    </p>
-                  </>
-                )}
+        <CardContent className="space-y-6">
+            
+          <div className="space-y-3">
+            <Label>AI Provider</Label>
+            <RadioGroup 
+                value={provider} 
+                onValueChange={(val: any) => setProvider(val)}
+                className="grid grid-cols-1 md:grid-cols-3 gap-4"
+            >
+              <div>
+                <RadioGroupItem value="anthropic" id="anthropic" className="peer sr-only" />
+                <Label
+                  htmlFor="anthropic"
+                  className="flex flex-col items-center justify-between rounded-md border-2 border-neutral-100 bg-transparent p-4 hover:bg-neutral-50 hover:text-neutral-900 peer-data-[state=checked]:border-neutral-900 [&:has([data-state=checked])]:border-neutral-900 cursor-pointer transition-all"
+                >
+                  <span className="text-xl mb-2">🧠</span>
+                  <span className="font-semibold">Anthropic</span>
+                  <span className="text-xs text-neutral-500">Claude 3.5 Sonnet</span>
+                </Label>
               </div>
-            </TabsContent>
 
-            <TabsContent value="openai" className="space-y-4 mt-6">
-              <div className="space-y-2">
-                <div className="flex items-center justify-between">
-                  <Label htmlFor="openai-key">OpenAI API Key</Label>
-                  {currentProvider === "openai" && hasKey && (
-                    <div className="flex items-center gap-2">
-                      <CheckCircle2 className="h-4 w-4 text-green-600" />
-                      <span className="text-sm text-green-600">Key configured</span>
-                    </div>
-                  )}
-                </div>
-                {hasKey && currentProvider === "openai" ? (
-                  <div className="space-y-2">
-                    <div className="flex items-center gap-2">
-                      <Input
-                        type={showKey ? "text" : "password"}
-                        value={showKey ? "sk-••••••••••••••" : "••••••••••••••"}
-                        disabled
-                        className="font-mono"
-                      />
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="icon"
-                        onClick={() => setShowKey(!showKey)}
-                      >
-                        {showKey ? (
-                          <EyeOff className="h-4 w-4" />
-                        ) : (
-                          <Eye className="h-4 w-4" />
-                        )}
-                      </Button>
-                    </div>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      onClick={handleChangeKey}
-                    >
-                      Change Key
-                    </Button>
-                  </div>
-                ) : (
-                  <>
-                    <Input
-                      id="openai-key"
-                      type="password"
-                      placeholder="sk-..."
-                      value={apiKey}
-                      onChange={(e) => setApiKey(e.target.value)}
-                      className="font-mono"
-                    />
-                    <p className="text-sm text-gray-500">
-                      Get your API key from{" "}
-                      <a
-                        href="https://platform.openai.com/api-keys"
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-blue-600 hover:underline inline-flex items-center gap-1"
-                      >
-                        OpenAI Platform
-                        <ExternalLink className="h-3 w-3" />
-                      </a>
-                    </p>
-                    <p className="text-xs text-gray-400">
-                      Pricing: ~$2.50 per 1M tokens (GPT-4)
-                    </p>
-                  </>
-                )}
+              <div>
+                <RadioGroupItem value="openai" id="openai" className="peer sr-only" />
+                <Label
+                  htmlFor="openai"
+                  className="flex flex-col items-center justify-between rounded-md border-2 border-neutral-100 bg-transparent p-4 hover:bg-neutral-50 hover:text-neutral-900 peer-data-[state=checked]:border-neutral-900 [&:has([data-state=checked])]:border-neutral-900 cursor-pointer transition-all"
+                >
+                  <span className="text-xl mb-2">🤖</span>
+                  <span className="font-semibold">OpenAI</span>
+                  <span className="text-xs text-neutral-500">GPT-4 Turbo</span>
+                </Label>
               </div>
-            </TabsContent>
 
-            <TabsContent value="google" className="space-y-4 mt-6">
-              <div className="space-y-2">
-                <div className="flex items-center justify-between">
-                  <Label htmlFor="google-key">Google API Key</Label>
-                  {currentProvider === "google" && hasKey && (
-                    <div className="flex items-center gap-2">
-                      <CheckCircle2 className="h-4 w-4 text-green-600" />
-                      <span className="text-sm text-green-600">Key configured</span>
-                    </div>
-                  )}
-                </div>
-                {hasKey && currentProvider === "google" ? (
-                  <div className="space-y-2">
-                    <div className="flex items-center gap-2">
-                      <Input
-                        type={showKey ? "text" : "password"}
-                        value={showKey ? "AIza••••••••••••••" : "••••••••••••••"}
-                        disabled
-                        className="font-mono"
-                      />
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="icon"
-                        onClick={() => setShowKey(!showKey)}
-                      >
-                        {showKey ? (
-                          <EyeOff className="h-4 w-4" />
-                        ) : (
-                          <Eye className="h-4 w-4" />
-                        )}
-                      </Button>
-                    </div>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      onClick={handleChangeKey}
-                    >
-                      Change Key
-                    </Button>
-                  </div>
-                ) : (
-                  <>
-                    <Input
-                      id="google-key"
-                      type="password"
-                      placeholder="AIza..."
-                      value={apiKey}
-                      onChange={(e) => setApiKey(e.target.value)}
-                      className="font-mono"
-                    />
-                    <p className="text-sm text-gray-500">
-                      Get your API key from{" "}
-                      <a
-                        href="https://aistudio.google.com/app/apikey"
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-blue-600 hover:underline inline-flex items-center gap-1"
-                      >
-                        Google AI Studio
-                        <ExternalLink className="h-3 w-3" />
-                      </a>
-                    </p>
-                    <p className="text-xs text-gray-400">
-                      Free tier available, then pay-as-you-go
-                    </p>
-                  </>
-                )}
+              <div>
+                <RadioGroupItem value="google" id="google" className="peer sr-only" disabled />
+                <Label
+                  htmlFor="google"
+                  className="flex flex-col items-center justify-between rounded-md border-2 border-neutral-100 bg-neutral-50 p-4 opacity-50 cursor-not-allowed"
+                >
+                  <span className="text-xl mb-2">⚡</span>
+                  <span className="font-semibold">Google</span>
+                  <span className="text-xs text-neutral-500">Gemini (Coming Soon)</span>
+                </Label>
               </div>
-            </TabsContent>
-          </Tabs>
+            </RadioGroup>
+          </div>
 
-          {apiKey && (
-            <div className="flex justify-end pt-4">
-              <Button onClick={handleSave} disabled={isSaving}>
-                {isSaving ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Saving...
-                  </>
-                ) : (
-                  "Save API Key"
+          <div className="space-y-3">
+            <div className="flex justify-between items-center">
+                <Label htmlFor="apiKey">API Key</Label>
+                {provider === 'anthropic' && (
+                    <a href="https://console.anthropic.com/settings/keys" target="_blank" rel="noopener noreferrer" className="text-xs text-blue-600 hover:underline flex items-center">
+                        Get Anthropic Key <ExternalLink className="h-3 w-3 ml-1" />
+                    </a>
                 )}
-              </Button>
+                {provider === 'openai' && (
+                    <a href="https://platform.openai.com/api-keys" target="_blank" rel="noopener noreferrer" className="text-xs text-blue-600 hover:underline flex items-center">
+                        Get OpenAI Key <ExternalLink className="h-3 w-3 ml-1" />
+                    </a>
+                )}
             </div>
-          )}
+            
+            <div className="relative">
+                <Input 
+                    id="apiKey" 
+                    type="password" 
+                    placeholder={isKeySet ? "••••••••••••••••••••••••" : (provider === 'anthropic' ? 'sk-ant-...' : 'sk-...')}
+                    value={apiKey}
+                    onChange={(e) => setApiKey(e.target.value)}
+                    className="pr-10"
+                />
+                {isKeySet && !apiKey && (
+                    <div className="absolute right-3 top-2.5 text-green-500 pointer-events-none">
+                        <Check className="h-5 w-5" />
+                    </div>
+                )}
+            </div>
+            
+            {isKeySet && (
+                <p className="text-xs text-neutral-500 flex items-center">
+                    <Key className="h-3 w-3 mr-1" />
+                    Key set {lastUpdated ? `(Updated ${lastUpdated.toLocaleDateString()})` : ''}. 
+                    Enter a new key above to change it.
+                </p>
+            )}
+            
+            {!isKeySet && (
+                <p className="text-xs text-neutral-500">
+                    Your key is stored securely and never shared.
+                </p>
+            )}
+          </div>
+
         </CardContent>
+        <CardFooter className="flex justify-between border-t p-6 bg-neutral-50/50">
+            <Button variant="outline" type="button" onClick={() => setApiKey("")}>Cancel</Button>
+            <Button onClick={handleSave} disabled={saving || (!apiKey && !isKeySet)}>
+                {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                {isKeySet && !apiKey ? "Update Provider" : "Save Configuration"}
+            </Button>
+        </CardFooter>
       </Card>
+      
+      <Alert>
+          <div className="h-4 w-4" />
+          <AlertTitle className="ml-2">About Billing</AlertTitle>
+          <AlertDescription className="ml-2 text-xs text-neutral-500">
+              You are responsible for API usage costs directly with {provider === 'anthropic' ? 'Anthropic' : 'OpenAI'}. 
+              Invento AI does not charge extra for using your own keys. 
+              Typical costs are minimal ($0.01 - $0.05 per conversation).
+          </AlertDescription>
+      </Alert>
     </div>
   );
 }
