@@ -56,7 +56,7 @@ export async function POST(req: NextRequest) {
              }, { status: 200 }); // Returning 200 as per pattern
         }
 
-        const lineTotal = (product.sellingPrice || 0) * item.quantity;
+        const lineTotal = (product.price || 0) * item.quantity;
         subtotal += lineTotal;
         
         invoiceItems.push({
@@ -64,7 +64,7 @@ export async function POST(req: NextRequest) {
             productId: product.id,
             name: product.name,
             quantity: item.quantity,
-            price: product.sellingPrice || 0,
+            price: product.price || 0,
             total: lineTotal
         });
     }

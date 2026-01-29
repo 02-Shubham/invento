@@ -82,7 +82,7 @@ export function CreatePaymentForm() {
     const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
 
     const form = useForm<PaymentFormValues>({
-        resolver: zodResolver(paymentSchema),
+        resolver: zodResolver(paymentSchema) as any,
         defaultValues: {
             customerId: "",
             paymentDate: new Date(),
@@ -212,6 +212,7 @@ export function CreatePaymentForm() {
             const finalPaymentData = {
                 ...paymentData,
                 paymentNumber: `PAY-${Date.now().toString().slice(-8)}`,
+                unappliedAmount: paymentData.amount - totalApplied
             };
 
             await firestoreService.addPayment(finalPaymentData, user.uid);

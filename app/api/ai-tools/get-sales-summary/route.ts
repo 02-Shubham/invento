@@ -18,7 +18,7 @@ export async function POST(req: NextRequest) {
 
     const allInvoices = await firestoreService.getInvoices(user);
     const periodInvoices = allInvoices.filter(inv => {
-        const d = new Date(inv.date);
+        const d = new Date(inv.createdAt);
         return d >= start && d <= end;
     });
 
@@ -31,15 +31,21 @@ export async function POST(req: NextRequest) {
     // Top Products
     // We need to aggregate items from all invoices. 
     // This is expensive locally but okay for small data.
-    const productStats: Record<string, { name: string, quantity: number, revenue: number }> = {};
+    const productStats: Record<string, { name: string, quantitySold: number, revenue: number }> = {};
     
     periodInvoices.forEach(inv => {
-        inv.items.forEach(item => {
+        // Handle legacy items object or array
+        const items = Array.isArray(inv.items) ? inv.items : Object.values(inv.items || {});
+        items.forEach((item: any) => { // using any for item temporarily to avoid strict type checks on legacy loose props
             if (!productStats[item.productId]) {
-                productStats[item.productId] = { name: item.name, quantity: 0, revenue: 0 };
+                productStats[item.productId] = { name: item.name, quantitySold: 0, revenue: 0 };
             }
-            productStats[item.productId].quantity += item.quantity;
-            productStats[item.productId].revenue += item.total; // Assumes item.total exists roughly
+            productStats[item.productId].quantitySold += (item.quantity || 0);
+            
+            // Calculate total if missing (legacy data integrity) or use item.total
+            // item.total should exist in modern invoices, but good to fallback
+            const itemTotal = item.total || (item.price * item.quantity) || 0;
+            productStats[item.productId].revenue += itemTotal; 
         });
     });
 

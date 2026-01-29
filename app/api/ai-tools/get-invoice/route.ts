@@ -30,7 +30,7 @@ export async function POST(req: NextRequest) {
         paidAmount: invoice.paidAmount || 0,
         balanceAmount: invoice.balanceAmount ?? invoice.total,
         status: invoice.status,
-        invoiceDate: invoice.invoiceDate,
+        invoiceDate: invoice.createdAt,
         dueDate: invoice.dueDate
     });
 

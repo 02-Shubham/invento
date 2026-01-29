@@ -34,11 +34,11 @@ export async function POST(req: NextRequest) {
     
     if (unitCost) {
         // Simple weighted average
-        const currentTotalValue = (product.stockQuantity || 0) * (product.costPrice || 0); // Assuming costPrice exists? 
+        const currentTotalValue = (product.stockQuantity || 0) * (product.price || 0); // Assuming costPrice exists? 
         // Product type has `costPrice`.
         const newTotalValue = currentTotalValue + (quantity * unitCost);
         const newAvgCost = newTotalValue / newStock;
-        updates.costPrice = newAvgCost; 
+        updates.price = newAvgCost; 
     }
 
     await firestoreService.updateProduct(productId, updates, user);

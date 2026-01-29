@@ -33,6 +33,12 @@ export default function AIChatWidget({ isOpen, onClose }: AIChatWidgetProps) {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
+  useEffect(() => {
+      if (user) {
+          console.log("🐛 DEBUG - YOUR USER ID IS:", user.uid);
+      }
+  }, [user]);
+
   // Auto-scroll to bottom
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });

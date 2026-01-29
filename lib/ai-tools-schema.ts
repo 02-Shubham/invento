@@ -33,6 +33,28 @@ export const AI_TOOLS: ToolDefinition[] = [
         required: ["query"]
       }
     }
+  },
+  {
+    type: "function",
+    function: {
+      name: "search_customers",
+      description: "Search for customers in the database by name, email, or phone. Use this when the user asks about 'customers', wants to find a specific person, or needs customer contact info.",
+      parameters: {
+        type: "object",
+        properties: {
+          query: {
+            type: "string",
+            description: "The search term - can be customer name, email, or phone number. Leave empty to list recent customers."
+          },
+          limit: {
+            type: "number",
+            description: "Maximum results to return",
+            default: 5
+          }
+        },
+        required: ["query"]
+      }
+    }
   }
 ];
 

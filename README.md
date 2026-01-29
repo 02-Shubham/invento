@@ -252,3 +252,27 @@ Private - All rights reserved
 ## Support
 
 For issues or questions, please contact the development team.
+
+## AI Function Calling
+
+The AI assistant can now execute real business operations:
+
+### Available Tools (Phase AI-3)
+- **search_products**: Search inventory by name or SKU
+
+### How It Works
+1. User asks about products
+2. AI recognizes need for product search
+3. AI calls search_products tool
+4. System executes search against your database
+5. AI receives results and responds conversationally
+
+### Example
+User: "Find leather bags"
+→ AI searches products
+→ Shows: "I found 2 leather bags: Leather Bag (₹800, 50 in stock)..."
+
+### Privacy & Security
+- Tools only access YOUR data (isolated by user ID)
+- All actions are logged for audit
+- Tools cannot modify data yet (read-only in Phase 3)

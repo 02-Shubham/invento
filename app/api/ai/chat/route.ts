@@ -1,3 +1,12 @@
+// FUNCTION CALLING FLOW:
+// 1. User sends message
+// 2. AI (OpenAI/Gemini) analyzes and decides if tools needed
+// 3. If yes, returns tool_use blocks (doesn't execute them)
+// 4. We execute tools by calling our APIs
+// 5. Send tool results back to AI
+// 6. AI processes results and responds to user
+// 7. User sees final response + indicator that tools were used
+
 import { NextRequest, NextResponse } from "next/server";
 import { getCurrentUser, successResponse, errorResponse } from "@/lib/api-helpers";
 import { sendChatMessage } from "@/lib/ai-client";
