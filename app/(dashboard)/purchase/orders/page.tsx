@@ -11,14 +11,18 @@ import { formatCurrency } from "@/lib/utils";
 import { format } from "date-fns";
 import { Plus, Eye } from "lucide-react";
 
+import { useAuth } from "@/lib/auth-context";
+
 export default function PurchaseOrdersListPage() {
     const [orders, setOrders] = useState<PurchaseOrder[]>([]);
     const [isLoading, setIsLoading] = useState(true);
+    const { user } = useAuth();
 
     useEffect(() => {
         const fetchOrders = async () => {
+             if (!user) return;
             try {
-                const data = await firestoreService.getPurchaseOrders();
+                const data = await firestoreService.getPurchaseOrders(user.uid);
                 setOrders(data);
             } catch (error) {
                 console.error("Failed to fetch purchase orders:", error);
@@ -26,8 +30,10 @@ export default function PurchaseOrdersListPage() {
                 setIsLoading(false);
             }
         };
-        fetchOrders();
-    }, []);
+        if (user) {
+            fetchOrders();
+        }
+    }, [user]);
 
     const getStatusVariant = (status: PurchaseOrder['status']) => {
         switch (status) {

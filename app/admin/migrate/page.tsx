@@ -6,8 +6,10 @@ import { firestoreService } from "@/lib/firestore-service";
 import { MOCK_PRODUCTS, MOCK_INVOICES } from "@/lib/store";
 import { toast } from "sonner";
 import { Loader2 } from "lucide-react";
+import { useAuth } from "@/lib/auth-context";
 
 export default function MigrateDataPage() {
+  const { user } = useAuth();
   const [isMigrating, setIsMigrating] = useState(false);
   const [log, setLog] = useState<string[]>([]);
 
@@ -16,6 +18,10 @@ export default function MigrateDataPage() {
   };
 
   const handleMigrate = async () => {
+    if (!user) {
+      toast.error("You must be logged in to run migration");
+      return;
+    }
     setIsMigrating(true);
     setLog([]);
     addLog("Starting migration...");
@@ -36,11 +42,8 @@ export default function MigrateDataPage() {
         // Let's just Add them. The stats on dashboard don't strictly require valid product IDs, just invoice totals.
         // Inventory deduction in invoices won't work for old invoices anyway.
         
-        await firestoreService.addProduct({
-            ...product,
-            createdAt: new Date(),
-            updatedAt: new Date(),
-        });
+        const { id, createdAt, updatedAt, userId, ...productData } = product;
+        await firestoreService.addProduct(productData as any, user.uid);
         addLog(`Migrated product: ${product.name}`);
       }
 
@@ -48,12 +51,8 @@ export default function MigrateDataPage() {
       addLog(`Found ${MOCK_INVOICES.length} mock invoices.`);
       for (const invoice of MOCK_INVOICES) {
          // Same issue with IDs. We will generate new ones.
-         await firestoreService.addInvoice({
-             ...invoice,
-             createdAt: new Date(invoice.createdAt), // Ensure date format
-             invoiceDate: new Date(invoice.invoiceDate),
-             dueDate: new Date(invoice.dueDate),
-         });
+         const { id, userId, invoiceDate, ...invoiceData } = invoice as any;
+         await firestoreService.addInvoice(invoiceData as any, user.uid);
          addLog(`Migrated invoice: ${invoice.invoiceNumber}`);
       }
 

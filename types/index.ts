@@ -77,6 +77,11 @@ export interface Invoice {
     paidAmount: number;
     balanceAmount: number;
     payments?: string[]; // IDs of applied payments
+    
+    // Display Helpers
+    subtotal?: number;
+    tax?: number;
+    inventoryLog?: string[];
 }
 
 export interface PaymentApplication {

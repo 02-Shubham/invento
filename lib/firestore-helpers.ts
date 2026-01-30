@@ -54,7 +54,7 @@ export async function addDocWithUser<T extends DocumentData>(
   const docRef = await addDoc(collection(db, collectionName), {
     ...data,
     userId,
-  } as T);
+  } as unknown as T);
   return docRef;
 }
 
@@ -80,7 +80,7 @@ export async function updateDocWithUser<T extends DocumentData>(
     throw new Error("Unauthorized: You don't have permission to update this document");
   }
   
-  await updateDoc(docRef, data);
+  await updateDoc(docRef, data as any);
 }
 
 /**

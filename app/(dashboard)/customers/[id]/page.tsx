@@ -35,10 +35,13 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { formatCurrency } from "@/lib/utils";
 
+import { useAuth } from "@/lib/auth-context";
+
 export default function CustomerDetailPage() {
     const params = useParams();
     const router = useRouter();
     const customerId = params.id as string;
+    const { user } = useAuth();
 
     const [customer, setCustomer] = useState<Customer | null>(null);
     const [invoices, setInvoices] = useState<Invoice[]>([]);
@@ -47,10 +50,11 @@ export default function CustomerDetailPage() {
 
     useEffect(() => {
         const loadData = async () => {
+             if (!user) return;
              setIsLoading(true);
             try {
                 // 1. Fetch Customer
-                const customerData = await firestoreService.getCustomerById(customerId);
+                const customerData = await firestoreService.getCustomerById(customerId, user.uid);
                 if (!customerData) {
                     toast.error("Customer not found");
                     router.push("/customers");
@@ -59,14 +63,14 @@ export default function CustomerDetailPage() {
                 setCustomer(customerData);
 
                 // 2. Fetch Invoices
-                const allInvoices = await firestoreService.getInvoices();
+                const allInvoices = await firestoreService.getInvoices(user.uid);
                 const customerInvoices = allInvoices
                     .filter(inv => inv.customerId === customerId)
                     .sort((a,b) => b.createdAt.getTime() - a.createdAt.getTime());
                 setInvoices(customerInvoices);
 
                 // 3. Fetch Payments
-                const customerPayments = await firestoreService.getCustomerPayments(customerId);
+                const customerPayments = await firestoreService.getCustomerPayments(customerId, user.uid);
                 setPayments(customerPayments.sort((a,b) => b.paymentDate.getTime() - a.paymentDate.getTime()));
 
             } catch (error) {
@@ -77,10 +81,10 @@ export default function CustomerDetailPage() {
             }
         };
 
-        if (customerId) {
+        if (customerId && user) {
             loadData();
         }
-    }, [customerId, router]);
+    }, [customerId, router, user]);
 
     if (isLoading) {
         return (
@@ -174,7 +178,7 @@ export default function CustomerDetailPage() {
                             <DollarSign className="h-4 w-4 text-muted-foreground" />
                         </CardHeader>
                         <CardContent>
-                            <div className="text-2xl font-bold">{formatCurrency(customer.totalSpent)}</div>
+                            <div className="text-2xl font-bold">{formatCurrency(customer.totalSpent || 0)}</div>
                              <p className="text-xs text-muted-foreground">
                                 Lifetime value
                              </p>

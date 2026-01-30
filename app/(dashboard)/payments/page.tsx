@@ -19,19 +19,24 @@ import { Payment } from "@/types";
 import { format } from "date-fns";
 import { formatCurrency } from "@/lib/utils";
 
+import { useAuth } from "@/lib/auth-context";
+
 export default function PaymentsPage() {
   const router = useRouter();
+  const { user } = useAuth();
   const [payments, setPayments] = useState<Payment[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
 
   useEffect(() => {
-    fetchPayments();
-  }, []);
+    if (user) {
+        fetchPayments(user.uid);
+    }
+  }, [user]);
 
-  const fetchPayments = async () => {
+  const fetchPayments = async (userId: string) => {
     try {
-      const data = await firestoreService.getPayments();
+      const data = await firestoreService.getPayments(userId);
       setPayments(data);
     } catch (error) {
       console.error("Error fetching payments:", error);

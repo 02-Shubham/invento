@@ -25,6 +25,7 @@ import {
 import { firestoreService } from "@/lib/firestore-service";
 import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
+import { useAuth } from "@/lib/auth-context";
 
 const quickProductSchema = z.object({
   name: z.string().min(1, "Name is required"),
@@ -48,6 +49,7 @@ export function QuickProductDialog({
   onSuccess,
   defaultName = ""
 }: QuickProductDialogProps) {
+  const { user } = useAuth();
   const [isLoading, setIsLoading] = useState(false);
 
   const form = useForm<QuickProductFormValues>({
@@ -64,6 +66,10 @@ export function QuickProductDialog({
   // (Optional: can use useEffect if strictly needed, but form reset usually better on open)
 
   const handleSubmit = async (data: QuickProductFormValues) => {
+    if (!user) {
+      toast.error("You must be logged in to create a product");
+      return;
+    }
     setIsLoading(true);
     try {
       // Auto-generate SKU if empty
@@ -83,7 +89,7 @@ export function QuickProductDialog({
         averageCost: data.price, // Initial cost assumption
         lastCost: data.price,
         totalValue: 0
-      });
+      }, user.uid);
 
       toast.success("Product created successfully");
       onSuccess(productId);

@@ -41,12 +41,13 @@ export async function POST(req: NextRequest) {
     eligibleInvoices.sort((a,b) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime());
 
     // 2. Distribute Payment
-    let appliedTo = [];
+    let appliedTo: { invoiceId: string; invoiceNumber: string; amountApplied: number }[] = [];
     if (autoApply && eligibleInvoices.length > 0) {
         appliedTo = distributePayment(amount, eligibleInvoices);
     }
 
     // 3. Create Payment Record & Update Invoices
+    const totalApplied = appliedTo.reduce((sum, app) => sum + app.amountApplied, 0);
     const paymentData = {
         paymentNumber: `PAY-${Date.now().toString().slice(-8)}`,
         customerId,
@@ -57,7 +58,8 @@ export async function POST(req: NextRequest) {
         referenceNumber: "",
         notes: "Recorded via AI Agent",
         autoApply,
-        appliedTo: appliedTo // This matches PaymentApplication[] type expected by service
+        appliedTo: appliedTo, // This matches PaymentApplication[] type expected by service
+        unappliedAmount: amount - totalApplied
     };
 
     // Use service to record payment transactionally

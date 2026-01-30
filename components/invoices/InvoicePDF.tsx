@@ -133,7 +133,6 @@ export const InvoicePDF = ({ invoice, settings }: InvoicePDFProps) => {
             <Text style={{ ...styles.label, fontSize: 12, fontWeight: 'bold', marginBottom: 5 }}>Bill To:</Text>
             <Text>{invoice.customerName}</Text>
             <Text>{invoice.customerEmail}</Text>
-            {invoice.customerPhone && <Text>{invoice.customerPhone}</Text>}
             {invoice.customerAddress && <Text>{invoice.customerAddress}</Text>}
         </View>
 
@@ -141,7 +140,7 @@ export const InvoicePDF = ({ invoice, settings }: InvoicePDFProps) => {
         <View style={styles.section}>
             <Text style={styles.label}>Date issued:</Text>
             <Text style={styles.value}>
-                {invoice.invoiceDate ? format(new Date(invoice.invoiceDate), 'PPP') : 'N/A'}
+                {invoice.createdAt ? format(new Date(invoice.createdAt), 'PPP') : 'N/A'}
             </Text>
             
             <Text style={styles.label}>Due Date:</Text>
@@ -173,7 +172,7 @@ export const InvoicePDF = ({ invoice, settings }: InvoicePDFProps) => {
       <View style={styles.totals}>
         <View style={styles.totalRow}>
           <Text>Subtotal:</Text>
-          <Text>{formatCurrency(invoice.subtotal)}</Text>
+          <Text>{formatCurrency(invoice.subtotal || invoice.total)}</Text>
         </View>
         {/* Tax removed */}
         <View style={[styles.totalRow, styles.grandTotal]}>
@@ -182,13 +181,7 @@ export const InvoicePDF = ({ invoice, settings }: InvoicePDFProps) => {
         </View>
       </View>
 
-      {/* Footer / Notes */}
-      {invoice.notes && (
-          <View style={{ marginTop: 40, borderTopWidth: 1, borderTopColor: '#eee', paddingTop: 10 }}>
-              <Text style={styles.label}>Notes:</Text>
-              <Text>{invoice.notes}</Text>
-          </View>
-      )}
+
 
     </Page>
   </Document>

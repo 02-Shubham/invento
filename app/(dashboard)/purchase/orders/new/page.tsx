@@ -6,11 +6,18 @@ import { PurchaseOrderForm } from "@/components/purchasing/PurchaseOrderForm";
 import { firestoreService } from "@/lib/firestore-service";
 import { toast } from "sonner";
 
+import { useAuth } from "@/lib/auth-context";
+
 export default function NewPurchaseOrderPage() {
     const router = useRouter();
+    const { user } = useAuth();
     const [isLoading, setIsLoading] = useState(false);
 
     const handleSubmit = async (data: any) => {
+        if (!user) {
+            toast.error("You must be logged in to create a purchase order");
+            return;
+        }
         setIsLoading(true);
         try {
             await firestoreService.addPurchaseOrder({
@@ -23,7 +30,7 @@ export default function NewPurchaseOrderPage() {
                 totalAmount: data.items.reduce((acc: number, item: any) => acc + (item.quantity * item.unitCost), 0),
                 poNumber: `PO-${Date.now()}`,
                 orderDate: new Date()
-            });
+            }, user.uid);
             toast.success("Purchase Order created successfully");
             router.push("/purchase/orders");
         } catch (error) {

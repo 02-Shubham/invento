@@ -10,6 +10,7 @@ interface Settings {
   taxRate: number;
   currency: string;
   invoicePrefix: string;
+  defaultPaymentTerms?: string;
 }
 
 interface AppState {
@@ -38,6 +39,7 @@ interface AppState {
 export const MOCK_PRODUCTS: Product[] = [
   {
     id: '1',
+    userId: 'mock-user',
     name: 'Wireless Mouse',
     sku: 'WM-001',
     category: 'Electronics',
@@ -46,11 +48,17 @@ export const MOCK_PRODUCTS: Product[] = [
     stockQuantity: 45,
     reorderLevel: 10,
     unit: 'pcs',
+    canBePurchased: true,
+    canBeProduced: false,
+    averageCost: 15.00,
+    lastCost: 15.00,
+    totalValue: 675.00,
     createdAt: new Date(),
     updatedAt: new Date(),
   },
   {
     id: '2',
+    userId: 'mock-user',
     name: 'Mechanical Keyboard',
     sku: 'MK-002',
     category: 'Electronics',
@@ -59,11 +67,17 @@ export const MOCK_PRODUCTS: Product[] = [
     stockQuantity: 8,
     reorderLevel: 15,
     unit: 'pcs',
+    canBePurchased: true,
+    canBeProduced: false,
+    averageCost: 50.00,
+    lastCost: 50.00,
+    totalValue: 400.00,
     createdAt: new Date(),
     updatedAt: new Date(),
   },
   {
     id: '3',
+    userId: 'mock-user',
     name: 'Office Chair',
     sku: 'OC-101',
     category: 'Furniture',
@@ -72,11 +86,17 @@ export const MOCK_PRODUCTS: Product[] = [
     stockQuantity: 5,
     reorderLevel: 5,
     unit: 'pcs',
+    canBePurchased: true,
+    canBeProduced: false,
+    averageCost: 100.00,
+    lastCost: 100.00,
+    totalValue: 500.00,
     createdAt: new Date(),
     updatedAt: new Date(),
   },
     {
     id: '4',
+    userId: 'mock-user',
     name: 'USB-C Cable (2m)',
     sku: 'CB-004',
     category: 'Electronics',
@@ -85,11 +105,17 @@ export const MOCK_PRODUCTS: Product[] = [
     stockQuantity: 100,
     reorderLevel: 20,
     unit: 'pcs',
+    canBePurchased: true,
+    canBeProduced: false,
+    averageCost: 5.00,
+    lastCost: 5.00,
+    totalValue: 500.00,
     createdAt: new Date(),
     updatedAt: new Date(),
   },
   {
     id: '5',
+    userId: 'mock-user',
     name: 'Monitor Stand',
     sku: 'MS-500',
     category: 'Furniture',
@@ -98,6 +124,11 @@ export const MOCK_PRODUCTS: Product[] = [
     stockQuantity: 0,
     reorderLevel: 10,
     unit: 'pcs',
+    canBePurchased: true,
+    canBeProduced: false,
+    averageCost: 20.00,
+    lastCost: 20.00,
+    totalValue: 0.00,
     createdAt: new Date(),
     updatedAt: new Date(),
   }
@@ -106,48 +137,42 @@ export const MOCK_PRODUCTS: Product[] = [
 export const MOCK_INVOICES: Invoice[] = [
   {
     id: '1',
+    userId: 'mock-user',
     invoiceNumber: 'INV-001',
     customerName: 'John Doe',
     customerEmail: 'john@example.com',
-    customerPhone: '555-0123',
     customerAddress: '123 Main St, NY',
     items: [
-      { productId: '1', productName: 'Wireless Mouse', quantity: 2, unitPrice: 29.99, total: 59.98 }
+      { productId: '1', productName: 'Wireless Mouse', quantity: 2, unitPrice: 29.99, total: 59.98 } as any
     ],
     subtotal: 59.98,
-    taxRate: 0.1,
-    taxAmount: 5.99,
+    tax: 5.99,
     total: 65.97,
     paidAmount: 65.97,
     balanceAmount: 0,
     payments: [],
     status: 'paid',
-    invoiceDate: new Date('2024-01-15'),
     dueDate: new Date('2024-02-14'),
-    notes: 'Thank you for your business',
     createdAt: new Date('2024-01-15'),
   },
    {
     id: '2',
+    userId: 'mock-user',
     invoiceNumber: 'INV-002',
     customerName: 'Acme Corp',
     customerEmail: 'billing@acme.com',
-    customerPhone: '555-9999',
     customerAddress: '456 Business Rd, CA',
     items: [
-      { productId: '3', productName: 'Office Chair', quantity: 5, unitPrice: 199.99, total: 999.95 }
+      { productId: '3', productName: 'Office Chair', quantity: 5, unitPrice: 199.99, total: 999.95 } as any
     ],
     subtotal: 999.95,
-    taxRate: 0.1,
-    taxAmount: 99.99,
+    tax: 99.99,
     total: 1099.94,
     paidAmount: 0,
     balanceAmount: 1099.94,
     payments: [],
     status: 'pending',
-    invoiceDate: new Date('2024-03-01'),
     dueDate: new Date('2024-03-31'),
-    notes: 'Net 30 terms',
     createdAt: new Date('2024-03-01'),
   }
 ];
@@ -197,6 +222,7 @@ export const useStore = create<AppState>()(
         taxRate: 18,
         currency: "INR",
         invoicePrefix: "INV-",
+        defaultPaymentTerms: "Due on Receipt"
       },
       updateSettings: (newSettings) =>
         set((state) => ({ settings: { ...state.settings, ...newSettings } })),

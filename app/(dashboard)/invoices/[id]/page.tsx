@@ -24,10 +24,13 @@ import {
     TableRow,
 } from "@/components/ui/table";
 
+import { useAuth } from "@/lib/auth-context";
+
 export default function InvoiceDetailPage() {
   const { id } = useParams();
   const router = useRouter();
   const { settings } = useStore(); // Keep settings from store for PDF
+  const { user } = useAuth();
   
   const [invoice, setInvoice] = useState<Invoice | null>(null);
   const [payments, setPayments] = useState<Payment[]>([]);
@@ -35,16 +38,16 @@ export default function InvoiceDetailPage() {
 
   useEffect(() => {
     async function fetchInvoiceAndPayments() {
-        if (!id || Array.isArray(id)) return;
+        if (!id || Array.isArray(id) || !user) return;
         try {
             setIsLoading(true);
-            const fetchedInvoice = await firestoreService.getInvoiceById(id);
+            const fetchedInvoice = await firestoreService.getInvoiceById(id, user.uid);
             if (fetchedInvoice) {
                 setInvoice(fetchedInvoice);
                 
                 // Fetch associated payments
                 if (fetchedInvoice.payments && fetchedInvoice.payments.length > 0) {
-                    const paymentPromises = fetchedInvoice.payments.map(pid => firestoreService.getPaymentById(pid));
+                    const paymentPromises = fetchedInvoice.payments.map(pid => firestoreService.getPaymentById(pid, user.uid));
                     const fetchedPayments = await Promise.all(paymentPromises);
                     // Filter out nulls in case a payment was deleted but not removed from invoice ref (shouldn't happen with correct transaction logic)
                     setPayments(fetchedPayments.filter(p => p !== null) as Payment[]);
@@ -60,8 +63,10 @@ export default function InvoiceDetailPage() {
             setIsLoading(false);
         }
     }
-    fetchInvoiceAndPayments();
-  }, [id, router]);
+    if (user && id) {
+        fetchInvoiceAndPayments();
+    }
+  }, [id, router, user]);
 
   if (isLoading) {
     return (
@@ -76,9 +81,10 @@ export default function InvoiceDetailPage() {
   }
 
   const handleDelete = async () => {
+    if (!user) return;
     if (confirm("Are you sure you want to delete this invoice?")) {
         try {
-            await firestoreService.deleteInvoice(invoice.id);
+            await firestoreService.deleteInvoice(invoice.id, user.uid);
             toast.success("Invoice deleted");
             router.push("/invoices");
         } catch (error) {
@@ -234,11 +240,11 @@ export default function InvoiceDetailPage() {
                     ))}
                     <TableRow>
                         <TableCell colSpan={3} className="text-right font-medium">Subtotal</TableCell>
-                        <TableCell className="text-right">{formatCurrency(invoice.subtotal)}</TableCell>
+                        <TableCell className="text-right">{formatCurrency(invoice.subtotal || 0)}</TableCell>
                     </TableRow>
                      <TableRow>
                         <TableCell colSpan={3} className="text-right font-medium">Tax</TableCell>
-                        <TableCell className="text-right">{formatCurrency(invoice.tax)}</TableCell>
+                        <TableCell className="text-right">{formatCurrency(invoice.tax || 0)}</TableCell>
                     </TableRow>
                      <TableRow>
                         <TableCell colSpan={3} className="text-right font-bold text-lg">Total</TableCell>

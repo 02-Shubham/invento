@@ -33,7 +33,7 @@ export async function POST(req: NextRequest) {
         id: p.id,
         name: p.name,
         sku: p.sku || "",
-        sellingPrice: p.sellingPrice || 0,
+        sellingPrice: p.price || 0,
         stockQuantity: p.stockQuantity || 0,
         canBePurchased: true, // Assuming default
         canBeProduced: false // Assuming default

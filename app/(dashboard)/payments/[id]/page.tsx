@@ -36,22 +36,24 @@ import { formatCurrency } from "@/lib/utils";
 import { format } from "date-fns";
 import { toast } from "sonner";
 import Link from "next/link";
+import { useAuth } from "@/lib/auth-context";
 
 export default function PaymentDetailPage() {
     const params = useParams();
     const router = useRouter();
+    const { user } = useAuth();
     const [payment, setPayment] = useState<Payment | null>(null);
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
-        if (params.id) {
-            loadPayment(params.id as string);
+        if (params.id && user) {
+            loadPayment(params.id as string, user.uid);
         }
-    }, [params.id]);
+    }, [params.id, user]);
 
-    const loadPayment = async (id: string) => {
+    const loadPayment = async (id: string, userId: string) => {
         try {
-            const data = await firestoreService.getPaymentById(id);
+            const data = await firestoreService.getPaymentById(id, userId);
             setPayment(data);
         } catch (error) {
             console.error(error);
@@ -62,9 +64,9 @@ export default function PaymentDetailPage() {
     };
 
     const handleDelete = async () => {
-        if (!payment) return;
+        if (!payment || !user) return;
         try {
-            await firestoreService.deletePayment(payment.id);
+            await firestoreService.deletePayment(payment.id, user.uid);
             toast.success("Payment deleted successfully");
             router.push("/payments");
         } catch (error) {
