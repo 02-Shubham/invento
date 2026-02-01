@@ -1,69 +1,114 @@
+"use client";
+
 import { 
-  BarChart3, 
-  Package, 
-  ShoppingCart, 
-  FileText, 
-  Zap,
-  ShieldCheck
+  Bot, 
+  MessageSquare, 
+  Wand2, 
+  TrendingUp, 
+  Workflow, 
+  BrainCircuit
 } from "lucide-react";
+import { cn } from "@/lib/utils";
+import { 
+  AgentsVisual, 
+  ChatVisual, 
+  MagicVisual, 
+  PredictiveVisual, 
+  WorkflowVisual, 
+  InsightsVisual 
+} from "./FeatureVisuals";
 
 const features = [
   {
-    icon: Package,
-    title: "Real-time Tracking",
-    description: "Monitor stock levels across multiple locations instantly. Never run out of best-sellers again."
+    icon: Bot,
+    title: "AI Agents at Work",
+    description: "Delegate tasks to autonomous agents that handle stock reordering, payment reminders, and customer follow-ups completely on autopilot.",
+    className: "md:col-span-1 md:row-span-2",
+    visual: AgentsVisual,
   },
   {
-    icon: ShoppingCart,
-    title: "Smart Purchasing",
-    description: "Automate purchase orders based on reorder points. Manage vendor relationships seamlessly."
+    icon: MessageSquare,
+    title: "Chat with Your Business",
+    description: "Need a sales report or customer summary? Just ask technical questions in plain English.",
+    className: "md:col-span-2 md:row-span-1",
+    visual: ChatVisual,
   },
   {
-    icon: FileText,
-    title: "Instant Invoicing",
-    description: "Create professional invoices in seconds. Convert quotes to sales with a single click."
+    icon: Wand2,
+    title: "Magical Creation",
+    description: "Describe a sale or expense, and watch the system generate records instantly.",
+    className: "md:col-span-1 md:row-span-1",
+    visual: MagicVisual,
   },
   {
-    icon: BarChart3,
-    title: "Insightful Reports",
-    description: "Visualize sales trends, profit margins, and inventory value with powerful analytics."
+    icon: TrendingUp,
+    title: "Predictive Intelligence",
+    description: "Forecast demand trends so you're always stocked ahead of the curve.",
+    className: "md:col-span-1 md:row-span-1",
+    visual: PredictiveVisual,
   },
   {
-    icon: Zap,
-    title: "AI Forecasting",
-    description: "Predict future demand using our advanced AI engine to optimize your inventory investment."
+    icon: Workflow,
+    title: "Automated Workflows",
+    description: "Set it and forget it. The system handles approval chains and recurring invoices automatically.",
+    className: "md:col-span-2 md:row-span-1",
+    visual: WorkflowVisual,
   },
   {
-    icon: ShieldCheck,
-    title: "Secure & Scalable",
-    description: "Enterprise-grade security keeps your data safe while our platform scales with your growth."
+    icon: BrainCircuit,
+    title: "Proactive Insights",
+    description: "Get proactive suggestions on pricing optimization and cost-saving opportunities.",
+    className: "md:col-span-1 md:row-span-1",
+    visual: InsightsVisual,
   }
 ];
 
 export function FeaturesSection() {
   return (
-    <section id="features" className="py-24 bg-white">
+    <section id="features" className="py-16 bg-white">
       <div className="container mx-auto px-4">
-        <div className="text-center max-w-3xl mx-auto mb-16">
-          <h2 className="text-base font-semibold text-blue-600 uppercase tracking-wide mb-2">Features</h2>
-          <p className="text-3xl md:text-4xl font-bold text-gray-900 mb-4">
-             Everything you need to run your business
+        <div className="text-center max-w-3xl mx-auto mb-12">
+          <h2 className="text-sm font-semibold text-blue-600 uppercase tracking-wide mb-2">Intelligent Automation</h2>
+          <p className="text-3xl font-bold text-gray-900 mb-3">
+             Run your business on Autopilot
           </p>
-          <p className="text-lg text-gray-600">
-            Powerful tools designed to help you save time, reduce errors, and increase profitability.
+          <p className="text-base text-gray-600">
+            Leverage a suite of AI agents and tools designed to automate operations, predict trends, and eliminate manual work.
           </p>
         </div>
 
-        <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 auto-rows-[minmax(0,1fr)] max-w-6xl mx-auto">
           {features.map((feature, index) => (
-            <div key={index} className="p-8 rounded-2xl border border-gray-100 bg-white hover:shadow-lg transition-all duration-300 hover:-translate-y-1">
-              <div className="w-12 h-12 bg-blue-50 rounded-xl flex items-center justify-center mb-6 text-blue-600">
-                <feature.icon className="h-6 w-6" />
+            <div 
+              key={index} 
+              className={cn(
+                "group relative overflow-hidden rounded-2xl bg-white border border-slate-200 shadow-sm hover:shadow-md transition-all duration-300",
+                feature.className
+              )}
+            >
+              <div className="absolute inset-0 bg-gradient-to-br from-white to-slate-50 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+              
+              <div className="relative h-full flex flex-col">
+                {/* Visual Area */}
+                <div className="flex-1 p-4 flex items-center justify-center bg-slate-50/50 border-b border-slate-100/50 min-h-[160px]">
+                   <div className="scale-90 w-full h-full flex items-center justify-center">
+                     <feature.visual />
+                   </div>
+                </div>
+                
+                {/* Content Area */}
+                <div className="p-5">
+                  <div className="flex items-center gap-3 mb-2">
+                    <div className="w-8 h-8 bg-blue-50 rounded-lg flex items-center justify-center text-blue-600 group-hover:scale-105 transition-transform duration-300">
+                        <feature.icon className="h-4 w-4" />
+                    </div>
+                    <h3 className="text-lg font-bold text-gray-900">{feature.title}</h3>
+                  </div>
+                  <p className="text-gray-600 leading-relaxed text-xs">
+                    {feature.description}
+                  </p>
+                </div>
               </div>
-              <h3 className="text-xl font-bold text-gray-900 mb-3">{feature.title}</h3>
-              <p className="text-gray-600 leading-relaxed">
-                {feature.description}
-              </p>
             </div>
           ))}
         </div>
