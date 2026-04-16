@@ -7,7 +7,7 @@ import { Toaster } from "@/components/ui/sonner";
 const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: "Invo - Inventory & Invoice Manager",
+  title: "Invento.ai - Inventory & Invoice Manager",
   description: "Simple inventory and invoice management for small businesses",
 };
 

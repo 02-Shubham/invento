@@ -55,6 +55,24 @@ export const AI_TOOLS: ToolDefinition[] = [
         required: ["query"]
       }
     }
+  },
+  {
+    type: "function",
+    function: {
+      name: "get_customers_with_pending_payments",
+      description: "Get a list of customers who have pending/unpaid invoices or outstanding payments. Use this when the user asks about customers with outstanding balances, unpaid invoices, overdue payments, or who owes money. Returns customer details with total outstanding amounts.",
+      parameters: {
+        type: "object",
+        properties: {
+          limit: {
+            type: "number",
+            description: "Maximum number of customers to return. Default is 10.",
+            default: 10
+          }
+        },
+        required: []
+      }
+    }
   }
 ];
 

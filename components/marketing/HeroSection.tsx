@@ -5,7 +5,7 @@ import { ArrowRight, CheckCircle2 } from "lucide-react";
 
 export function HeroSection() {
   return (
-    <section className="relative pt-32 pb-20 lg:pt-48 lg:pb-32 overflow-hidden bg-gradient-to-b from-blue-50/50 to-white">
+    <section className="relative pt-12 pb-10 lg:pt-24 lg:pb-8 overflow-hidden bg-gradient-to-b from-blue-50/50 to-white">
       <div className="container mx-auto px-4 text-center">
         <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-blue-100/50 text-blue-700 text-sm font-medium mb-8 border border-blue-100">
             <span className="relative flex h-2 w-2">
@@ -27,7 +27,7 @@ export function HeroSection() {
           automate purchase orders, and track sales without the headache.
         </p>
         
-        <div className="flex flex-col sm:flex-row items-center justify-center gap-4 mb-16">
+        <div className="flex flex-col sm:flex-row items-center justify-center gap-4 mb-8">
           <Link href="/signup">
             <Button size="lg" className="h-12 px-8 text-base bg-blue-600 hover:bg-blue-700 shadow-xl shadow-blue-600/20 rounded-full transition-all hover:scale-105">
               Start Free Trial
@@ -57,7 +57,7 @@ export function HeroSection() {
            <div className="aspect-[16/9] rounded-xl bg-gray-50 overflow-hidden relative group">
               <Image 
                 src="/demo.png" 
-                alt="Invo Dashboard Preview" 
+                alt="Invento.ai Dashboard Preview" 
                 fill 
                 className="object-cover object-top"
                 priority

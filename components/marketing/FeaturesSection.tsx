@@ -68,8 +68,14 @@ export function FeaturesSection() {
     <section id="features" className="py-16 bg-white">
       <div className="container mx-auto px-4">
         <div className="text-center max-w-3xl mx-auto mb-12">
-          <h2 className="text-sm font-semibold text-blue-600 uppercase tracking-wide mb-2">Intelligent Automation</h2>
-          <p className="text-3xl font-bold text-gray-900 mb-3">
+                  <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-blue-100/50 text-blue-700 text-sm font-medium mb-8 border border-blue-100">
+            <span className="relative flex h-2 w-2">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span>
+              <span className="relative inline-flex rounded-full h-2 w-2 bg-blue-500"></span>
+            </span>
+            Intelligent Automation
+        </div>
+          <p className="text-5xl font-bold text-gray-900 mb-3">
              Run your business on Autopilot
           </p>
           <p className="text-base text-gray-600">

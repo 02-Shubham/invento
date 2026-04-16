@@ -1,62 +1,93 @@
+"use client";
+
 import Link from "next/link";
-import { Archive, Github, Twitter, Linkedin } from "lucide-react";
+import { Twitter, Linkedin, Mail } from "lucide-react";
 
 export function Footer() {
   return (
-    <footer className="bg-gray-50 border-t border-gray-100 pt-16 pb-8">
-      <div className="container mx-auto px-4">
-        <div className="grid md:grid-cols-4 gap-12 mb-12">
-          <div className="space-y-4">
-            <Link href="/" className="flex items-center gap-2">
-              <div className="bg-blue-600 p-1.5 rounded-lg">
-                <Archive className="h-5 w-5 text-white" />
-              </div>
-              <span className="font-bold text-xl text-gray-900">Invo</span>
-            </Link>
-            <p className="text-gray-500 text-sm leading-relaxed">
-              Simplifying inventory management for modern businesses worldwide.
-            </p>
-            <div className="flex gap-4">
-                <a href="#" className="text-gray-400 hover:text-gray-900"><Twitter className="h-5 w-5" /></a>
-                <a href="#" className="text-gray-400 hover:text-gray-900"><Github className="h-5 w-5" /></a>
-                <a href="#" className="text-gray-400 hover:text-gray-900"><Linkedin className="h-5 w-5" /></a>
-            </div>
-          </div>
-          
-          <div>
-            <h4 className="font-semibold text-gray-900 mb-4">Product</h4>
-            <ul className="space-y-2 text-sm text-gray-600">
-                <li><Link href="#" className="hover:text-blue-600">Features</Link></li>
-                <li><Link href="#" className="hover:text-blue-600">Pricing</Link></li>
-                <li><Link href="#" className="hover:text-blue-600">API</Link></li>
-                <li><Link href="#" className="hover:text-blue-600">Integrations</Link></li>
+    <footer className="relative bg-white border-t border-gray-100 pt-16 pb-48">
+      <div className="container max-w-5xl mx-auto px-4 relative z-10">
+        {/* Navigation Grid */}
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-8 mb-32">
+          {/* Product */}
+          <div className="text-center">
+            <h4 className="font-semibold text-gray-900 mb-4 text-sm">Product</h4>
+            <ul className="space-y-2.5 text-sm text-gray-600">
+              <li><Link href="#features" className="hover:text-blue-600 transition-colors">Features</Link></li>
+              <li><Link href="#" className="hover:text-blue-600 transition-colors">AI Agents</Link></li>
+              <li><Link href="#" className="hover:text-blue-600 transition-colors">Integrations</Link></li>
+              <li><Link href="#" className="hover:text-blue-600 transition-colors">Pricing</Link></li>
             </ul>
           </div>
 
-          <div>
-             <h4 className="font-semibold text-gray-900 mb-4">Company</h4>
-            <ul className="space-y-2 text-sm text-gray-600">
-                <li><Link href="#" className="hover:text-blue-600">About</Link></li>
-                <li><Link href="#" className="hover:text-blue-600">Blog</Link></li>
-                <li><Link href="#" className="hover:text-blue-600">Careers</Link></li>
-                <li><Link href="#" className="hover:text-blue-600">Contact</Link></li>
+          {/* Company */}
+          <div className="text-center">
+            <h4 className="font-semibold text-gray-900 mb-4 text-sm">Company</h4>
+            <ul className="space-y-2.5 text-sm text-gray-600">
+              <li><Link href="#" className="hover:text-blue-600 transition-colors">About</Link></li>
+              <li><Link href="#" className="hover:text-blue-600 transition-colors">Blog</Link></li>
+              <li><Link href="#" className="hover:text-blue-600 transition-colors">Careers</Link></li>
+              <li><Link href="#" className="hover:text-blue-600 transition-colors">Contact</Link></li>
             </ul>
           </div>
 
-          <div>
-            <h4 className="font-semibold text-gray-900 mb-4">Legal</h4>
-            <ul className="space-y-2 text-sm text-gray-600">
-                <li><Link href="#" className="hover:text-blue-600">Privacy Policy</Link></li>
-                <li><Link href="#" className="hover:text-blue-600">Terms of Service</Link></li>
-                <li><Link href="#" className="hover:text-blue-600">Cookie Policy</Link></li>
+          {/* Resources */}
+          <div className="text-center">
+            <h4 className="font-semibold text-gray-900 mb-4 text-sm">Resources</h4>
+            <ul className="space-y-2.5 text-sm text-gray-600">
+              <li><Link href="#" className="hover:text-blue-600 transition-colors">Documentation</Link></li>
+              <li><Link href="#" className="hover:text-blue-600 transition-colors">API Reference</Link></li>
+              <li><Link href="#" className="hover:text-blue-600 transition-colors">Tutorials</Link></li>
+              <li><Link href="#" className="hover:text-blue-600 transition-colors">Help Center</Link></li>
+            </ul>
+          </div>
+
+          {/* Legal */}
+          <div className="text-center">
+            <h4 className="font-semibold text-gray-900 mb-4 text-sm">Legal</h4>
+            <ul className="space-y-2.5 text-sm text-gray-600">
+              <li><Link href="#" className="hover:text-blue-600 transition-colors">Privacy</Link></li>
+              <li><Link href="#" className="hover:text-blue-600 transition-colors">Terms</Link></li>
+              <li><Link href="#" className="hover:text-blue-600 transition-colors">Security</Link></li>
+            </ul>
+          </div>
+
+          {/* Social */}
+          <div className="text-center">
+            <h4 className="font-semibold text-gray-900 mb-4 text-sm">Social</h4>
+            <ul className="space-y-2.5 text-sm text-gray-600">
+              <li><a href="#" className="hover:text-blue-600 transition-colors">Twitter</a></li>
+              <li><a href="#" className="hover:text-blue-600 transition-colors">LinkedIn</a></li>
+              <li><a href="#" className="hover:text-blue-600 transition-colors">GitHub</a></li>
             </ul>
           </div>
         </div>
-        
-        <div className="pt-8 border-t border-gray-200 text-center text-sm text-gray-500">
-            © {new Date().getFullYear()} Invo Inc. All rights reserved.
+
+        {/* Copyright
+        <div className="pt-8 border-t border-gray-200 text-center text-xs text-gray-500 relative z-20">
+          © 2026 INVENTO.AI. All rights reserved. Made with ❤️ by <a href="https://02-Shubham.vercel.app">Shubham</a>
+        </div> */}
+      </div>
+
+      {/* Large Brand Watermark - Positioned at bottom */}
+      <div className="absolute bottom-0 left-0 right-0 w-full pointer-events-none select-none z-0">
+        <div className="w-full flex items-center justify-center">
+          <h2 
+            className="font-bold leading-none whitespace-nowrap"
+            style={{
+              fontSize: 'clamp(8rem, 20vw, 18rem)',
+              color: 'rgba(0, 0, 0, 0.055)',
+              fontFamily: 'system-ui, -apple-system, sans-serif',
+              fontWeight: 800,
+              letterSpacing: '-0.03em'
+            }}
+          >
+            INVENTO.AI
+          </h2>
         </div>
       </div>
+
+      
     </footer>
   );
 }

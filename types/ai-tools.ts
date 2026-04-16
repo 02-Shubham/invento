@@ -184,3 +184,23 @@ export interface AddStockResult {
     newStockLevel: number;
     transactionId: string;
 }
+
+// Get Customers with Pending Payments
+export interface GetCustomersPendingPaymentsRequest {
+  limit?: number;
+}
+
+export interface CustomerPendingPayment {
+  customerId: string;
+  customerName: string;
+  customerEmail: string;
+  totalOutstanding: number;
+  invoiceCount: number;
+  oldestInvoiceDate: Date;
+}
+
+export interface GetCustomersPendingPaymentsResult {
+  customers: CustomerPendingPayment[];
+  totalCustomersWithPendingPayments: number;
+}
+

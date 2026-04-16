@@ -33,6 +33,10 @@ export async function executeToolFunction(
         result = await executeSearchCustomers(toolInput, userId);
         break;
       
+      case "get_customers_with_pending_payments":
+        result = await executeGetCustomersPendingPayments(toolInput, userId);
+        break;
+      
       // Add more cases in Phase AI-4
       
       default:
@@ -156,6 +160,87 @@ async function executeSearchCustomers(
       return {
           success: false,
           error: error.message || "Customer search failed"
+      };
+  }
+}
+
+async function executeGetCustomersPendingPayments(
+  input: { limit?: number },
+  userId: string
+): Promise<ToolResult> {
+  try {
+      const { limit = 10 } = input;
+      
+      // Get all invoices for the user
+      const allInvoices = await firestoreService.getInvoices(userId);
+      
+      // Filter for unpaid/partially paid/overdue invoices
+      const unpaidInvoices = allInvoices.filter(invoice => 
+        invoice.status === 'unpaid' || 
+        invoice.status === 'partially_paid' || 
+        invoice.status === 'overdue'
+      );
+
+      // Group by customer and calculate totals
+      const customerMap = new Map<string, {
+        customerId: string;
+        customerName: string;
+        customerEmail: string;
+        totalOutstanding: number;
+        invoiceCount: number;
+        oldestInvoiceDate: Date;
+      }>();
+
+      for (const invoice of unpaidInvoices) {
+        const customerId = invoice.customerId || 'unknown';
+        const outstanding = invoice.balanceAmount || invoice.total;
+
+        if (customerMap.has(customerId)) {
+          const existing = customerMap.get(customerId)!;
+          existing.totalOutstanding += outstanding;
+          existing.invoiceCount += 1;
+          
+          // Update oldest invoice date if this one is older
+          const invoiceDate = new Date(invoice.createdAt);
+          if (invoiceDate < existing.oldestInvoiceDate) {
+            existing.oldestInvoiceDate = invoiceDate;
+          }
+        } else {
+          customerMap.set(customerId, {
+            customerId,
+            customerName: invoice.customerName,
+            customerEmail: invoice.customerEmail,
+            totalOutstanding: outstanding,
+            invoiceCount: 1,
+            oldestInvoiceDate: new Date(invoice.createdAt)
+          });
+        }
+      }
+
+      // Convert to array and sort by outstanding amount (descending)
+      const customers = Array.from(customerMap.values())
+        .sort((a, b) => b.totalOutstanding - a.totalOutstanding)
+        .slice(0, limit);
+
+      return {
+        success: true,
+        data: {
+          count: customers.length,
+          customers: customers.map(c => ({
+            customerId: c.customerId,
+            customerName: c.customerName,
+            customerEmail: c.customerEmail,
+            totalOutstanding: c.totalOutstanding,
+            invoiceCount: c.invoiceCount,
+            oldestInvoiceDate: c.oldestInvoiceDate
+          }))
+        }
+      };
+
+  } catch (error: any) {
+      return {
+          success: false,
+          error: error.message || "Failed to get customers with pending payments"
       };
   }
 }

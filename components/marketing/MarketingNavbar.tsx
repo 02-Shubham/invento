@@ -16,7 +16,7 @@ export function MarketingNavbar() {
             <Archive className="h-5 w-5 text-white" />
           </div>
           <span className="font-bold text-xl bg-gradient-to-r from-blue-700 to-blue-500 bg-clip-text text-transparent">
-            Invo
+            Invento.ai
           </span>
         </Link>
 

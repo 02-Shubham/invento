@@ -1,4 +1,4 @@
-# INVO - Inventory & Invoice Management System
+# INVENTO.AI - Inventory & Invoice Management System
 
 A modern, multi-tenant SaaS platform for inventory and invoice management built with Next.js, Firebase, and TypeScript.
 
