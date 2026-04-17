@@ -102,7 +102,9 @@ export function VoiceProvider({ children }: { children: ReactNode }) {
   const router = useRouter();
 
   // Web Speech API ref — initialised lazily on first use
-  const recognitionRef = useRef<SpeechRecognition | null>(null);
+  // Typed as `any` because SpeechRecognition is not in the default TS lib;
+  // runtime safety is guaranteed by the isSupported check in startRecording().
+  const recognitionRef = useRef<any>(null);
   const silenceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Multi-turn conversation history (cleared after a complete action)
@@ -271,7 +273,7 @@ export function VoiceProvider({ children }: { children: ReactNode }) {
       (window as any).SpeechRecognition ||
       (window as any).webkitSpeechRecognition;
 
-    const recognition: SpeechRecognition = new SpeechRecognitionCtor();
+    const recognition: any = new SpeechRecognitionCtor();
     recognitionRef.current = recognition;
 
     recognition.lang = "en-US";
@@ -283,7 +285,7 @@ export function VoiceProvider({ children }: { children: ReactNode }) {
       setIsRecording(true);
     };
 
-    recognition.onresult = (event: SpeechRecognitionEvent) => {
+    recognition.onresult = (event: any) => {
       let interim = "";
       let finalText = "";
 
@@ -303,7 +305,7 @@ export function VoiceProvider({ children }: { children: ReactNode }) {
       }
     };
 
-    recognition.onerror = (event: SpeechRecognitionErrorEvent) => {
+    recognition.onerror = (event: any) => {
       // 'no-speech' is benign — user just didn't say anything
       if (event.error === "no-speech") return;
       if (event.error === "not-allowed") {
