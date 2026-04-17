@@ -10,7 +10,7 @@ export default function AIChatOverview() {
 
   return (
     <>
-      {/* Floating Action Button */}
+      {/* Floating Action Button — text chat (sits at bottom-right corner) */}
       <div className={`fixed bottom-6 right-6 z-50 transition-all duration-300 ${isOpen ? 'scale-0 opacity-0' : 'scale-100 opacity-100'}`}>
         <Button
             onClick={() => setIsOpen(true)}
@@ -24,9 +24,9 @@ export default function AIChatOverview() {
             <span className="relative inline-flex rounded-full h-4 w-4 bg-sky-500"></span>
           </span>
           
-          {/* Tooltip on hover (simple) */}
+          {/* Tooltip on hover */}
           <span className="absolute right-full mr-3 top-1/2 -translate-y-1/2 px-2 py-1 bg-white text-black text-xs font-medium rounded shadow-sm opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap border pointer-events-none">
-              Ask AI Assistant
+              Chat with AI
           </span>
         </Button>
       </div>
@@ -35,3 +35,4 @@ export default function AIChatOverview() {
     </>
   );
 }
+

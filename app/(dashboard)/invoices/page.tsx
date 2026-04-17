@@ -1,6 +1,7 @@
 "use client";
 
 import { useStore } from "@/lib/store"; // Keeping for settings if needed
+import { useVoice } from "@/lib/voice-context";
 import { Invoice } from "@/types";
 import { useState, useEffect } from "react";
 import {
@@ -40,9 +41,21 @@ import { useAuth } from "@/lib/auth-context";
 
 export default function InvoicesPage() {
   const { user } = useAuth(); // Get authenticated user
+  const { lastResponse, clearResponse } = useVoice();
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
+
+  // (kt) Voice prefill — if navigated here by a CREATE_INVOICE voice command
+  // that already has the customer name, prefill the customer filter.
+  // The VoiceContext will have already navigated to /invoices/new; this is a
+  // fallback handler in case the user lands on the list page instead.
+  useEffect(() => {
+    if (lastResponse?.intent === "CREATE_INVOICE" && lastResponse.customer_name) {
+      setColumnFilters([{ id: "customerName", value: lastResponse.customer_name }]);
+      clearResponse();
+    }
+  }, [lastResponse, clearResponse]);
 
   const fetchInvoices = async () => {
     if (!user) return; // Wait for user

@@ -2,6 +2,7 @@
 
 import { useStore } from "@/lib/store"; // Keeping for settings/other if needed, but removing product/actions
 import { useAuth } from "@/lib/auth-context";
+import { useVoice } from "@/lib/voice-context";
 import { Product } from "@/types";
 import { useState, useEffect } from "react";
 import {
@@ -45,11 +46,21 @@ import { firestoreService } from "@/lib/firestore-service";
 
 export default function InventoryPage() {
   const { user } = useAuth();
+  const { lastResponse, clearResponse } = useVoice();
   const [products, setProducts] = useState<Product[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
   const [isAddOpen, setIsAddOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
+
+  // (kt) Voice prefill — when navigated here via a SEARCH_PRODUCT voice command,
+  // auto-populate the product name search filter with the extracted search_query.
+  useEffect(() => {
+    if (lastResponse?.intent === "SEARCH_PRODUCT" && lastResponse.search_query) {
+      setColumnFilters([{ id: "name", value: lastResponse.search_query }]);
+      clearResponse();
+    }
+  }, [lastResponse, clearResponse]);
 
   const fetchProducts = async () => {
     if (!user) return;
