@@ -6,9 +6,10 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Send, Loader2, Bot, AlertTriangle, Sparkles, X, Wrench } from "lucide-react";
+import { Send, Loader2, Bot, AlertTriangle, Sparkles, X, Wrench, Mic, Square, MicOff } from "lucide-react";
 import Link from "next/link";
 import { Badge } from "@/components/ui/badge";
+import { useVoice } from "@/lib/voice-context";
 
 interface Message {
   id: string;
@@ -26,12 +27,90 @@ interface AIChatWidgetProps {
 
 export default function AIChatWidget({ isOpen, onClose }: AIChatWidgetProps) {
   const { user } = useAuth();
+  const {
+    isRecording,
+    isProcessing: isVoiceProcessing,
+    partialText,
+    lastResponse,
+    isSupported: isVoiceSupported,
+    startRecording,
+    stopRecording,
+    clearResponse,
+  } = useVoice();
+
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<{message: string, type?: string} | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+
+  // Sync input text with partial voice transcript
+  useEffect(() => {
+    if (isRecording) {
+      setInput(partialText || "Listening...");
+    }
+  }, [isRecording, partialText]);
+
+  // Handle voice response
+  useEffect(() => {
+    if (!lastResponse) return;
+
+    const userMsgId = generateId();
+    const aiMsgId = generateId();
+
+    if (lastResponse.intent === "QUERY" && lastResponse.answer) {
+      const answerText = lastResponse.answer;
+      setMessages(prev => [
+        ...prev,
+        {
+          id: userMsgId,
+          role: "user",
+          content: input || "Voice query",
+          timestamp: new Date()
+        },
+        {
+          id: aiMsgId,
+          role: "assistant",
+          content: answerText,
+          timestamp: new Date()
+        }
+      ]);
+      setInput("");
+      clearResponse();
+    } else if (
+      lastResponse.intent === "NAVIGATE" ||
+      lastResponse.intent === "SEARCH_PRODUCT" ||
+      lastResponse.intent === "CREATE_INVOICE" ||
+      lastResponse.intent === "VIEW_REPORT"
+    ) {
+      const actionText = lastResponse.intent === "NAVIGATE"
+        ? `Navigating to ${lastResponse.target_screen ?? "page"}...`
+        : lastResponse.intent === "SEARCH_PRODUCT"
+        ? `Searching for "${lastResponse.search_query}"...`
+        : lastResponse.intent === "CREATE_INVOICE"
+        ? `Creating invoice for ${lastResponse.customer_name ?? "customer"}...`
+        : `Opening report...`;
+
+      setMessages(prev => [
+        ...prev,
+        {
+          id: userMsgId,
+          role: "user",
+          content: input || "Voice command",
+          timestamp: new Date()
+        },
+        {
+          id: aiMsgId,
+          role: "assistant",
+          content: actionText,
+          timestamp: new Date()
+        }
+      ]);
+      setInput("");
+      clearResponse();
+    }
+  }, [lastResponse, clearResponse]);
 
   useEffect(() => {
       if (user) {
@@ -133,7 +212,20 @@ export default function AIChatWidget({ isOpen, onClose }: AIChatWidgetProps) {
   };
 
   return (
-    <div className={`fixed bottom-4 right-4 z-50 w-[400px] h-[600px] shadow-2xl rounded-xl border border-neutral-200 bg-white flex-col transition-all duration-300 transform ${isOpen ? 'translate-y-0 opacity-100 flex' : 'translate-y-10 opacity-0 pointer-events-none hidden'}`}>
+    <>
+      {/* Backdrop Overlay */}
+      <div 
+        className={`fixed inset-0 bg-black/40 backdrop-blur-sm z-50 transition-opacity duration-300 ${
+          isOpen ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'
+        }`}
+        onClick={onClose}
+      />
+
+      <div className={`fixed top-1/2 left-1/2 -translate-x-1/2 z-50 w-[calc(100%-2rem)] md:w-[650px] h-[700px] max-h-[85vh] shadow-2xl rounded-xl border border-neutral-200 bg-white flex flex-col transition-all duration-300 transform ${
+        isOpen 
+          ? '-translate-y-1/2 scale-100 opacity-100' 
+          : '-translate-y-[45%] scale-95 opacity-0 pointer-events-none'
+      }`}>
       
       {/* Header */}
       <div className="flex items-center justify-between p-4 border-b bg-neutral-50 rounded-t-xl">
@@ -259,24 +351,44 @@ export default function AIChatWidget({ isOpen, onClose }: AIChatWidgetProps) {
       {/* Input Area */}
       <div className="p-4 border-t bg-white rounded-b-xl">
         <div className="flex items-end gap-2">
-            <Input 
-                ref={inputRef}
-                value={input}
-                onChange={(e) => setInput(e.target.value)}
-                onKeyDown={handleKeyDown}
-                placeholder="Ask anything..."
-                className="min-h-[44px] max-h-[120px]"
-                disabled={loading}
-            />
+            <div className="relative flex-1">
+              <Input 
+                  ref={inputRef}
+                  value={input}
+                  onChange={(e) => setInput(e.target.value)}
+                  onKeyDown={handleKeyDown}
+                  placeholder={isRecording ? "Listening..." : "Ask anything..."}
+                  className="min-h-[44px] max-h-[120px] pr-10"
+                  disabled={loading || isRecording}
+              />
+              <Button
+                  variant="ghost"
+                  size="icon"
+                  className={`absolute right-1.5 top-1/2 -translate-y-1/2 h-8 w-8 rounded-full ${isRecording ? 'text-red-500 bg-red-50 animate-pulse' : 'text-neutral-500 hover:text-black hover:bg-neutral-105'}`}
+                  onClick={() => {
+                    if (!isVoiceSupported) return;
+                    if (isRecording) {
+                      stopRecording();
+                    } else {
+                      startRecording();
+                    }
+                  }}
+                  disabled={isVoiceProcessing || !isVoiceSupported}
+                  title={!isVoiceSupported ? "Voice is not supported in this browser" : isRecording ? "Stop listening" : "Talk to Invento"}
+              >
+                  {isRecording ? <Square className="h-4 w-4 fill-current" /> : !isVoiceSupported ? <MicOff className="h-4 w-4" /> : <Mic className="h-4 w-4" />}
+              </Button>
+            </div>
             <Button 
                 onClick={sendMessage} 
                 className="h-11 w-11 shrink-0 rounded-lg" // Square-ish button looks modern
-                disabled={!input.trim() || loading}
+                disabled={!input.trim() || loading || isRecording}
             >
                 {loading ? <Loader2 className="h-5 w-5 animate-spin" /> : <Send className="h-5 w-5" />}
             </Button>
         </div>
       </div>
     </div>
+    </>
   );
 }

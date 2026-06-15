@@ -1,6 +1,7 @@
 import { MarketingNavbar } from "@/components/marketing/MarketingNavbar";
 import { HeroSection } from "@/components/marketing/HeroSection";
 import { FeaturesSection } from "@/components/marketing/FeaturesSection";
+import { PricingSection } from "@/components/marketing/PricingSection";
 import { Footer } from "@/components/marketing/Footer";
 
 export default function Home() {
@@ -10,7 +11,7 @@ export default function Home() {
       <main>
         <HeroSection />
         <FeaturesSection />
-        {/* We can add Pricing, CTA, Testimonials here later */}
+        <PricingSection />
       </main>
       <Footer />
     </div>

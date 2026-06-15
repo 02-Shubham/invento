@@ -5,7 +5,7 @@ import { ArrowRight, CheckCircle2 } from "lucide-react";
 
 export function HeroSection() {
   return (
-    <section className="relative pt-12 pb-10 lg:pt-24 lg:pb-8 overflow-hidden bg-gradient-to-b from-blue-50/50 to-white">
+    <section className="relative pt-16 pb-10 lg:pt-28 lg:pb-14 overflow-hidden bg-gradient-to-b from-blue-50/50 to-white">
       <div className="container mx-auto px-4 text-center">
         <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-blue-100/50 text-blue-700 text-sm font-medium mb-8 border border-blue-100">
             <span className="relative flex h-2 w-2">
@@ -17,12 +17,22 @@ export function HeroSection() {
         
         <h1 className="text-5xl lg:text-7xl font-bold tracking-tight text-gray-900 mb-6 max-w-4xl mx-auto leading-[1.1]">
           Master Your Inventory. <br />
-          <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-600 to-indigo-600">
+          <span className="text-transparent bg-clip-text bg-linear-to-r from-blue-600 to-indigo-600">
             Grow Your Business.
           </span>
+          {/* <span
+              style={{
+                WebkitTextStroke: "2px rgb(10,14,100)",
+                WebkitTextFillColor: "transparent",
+                color: "transparent",
+                paintOrder: "stroke",
+              }}
+            >
+               Business.
+            </span> */}
         </h1>
         
-        <p className="text-xl text-gray-600 mb-10 max-w-2xl mx-auto leading-relaxed">
+        <p className="text-[18px] text-gray-600 mb-10 max-w-2xl mx-auto leading-relaxed">
           The all-in-one platform for modern businesses to manage stock, 
           automate purchase orders, and track sales without the headache.
         </p>

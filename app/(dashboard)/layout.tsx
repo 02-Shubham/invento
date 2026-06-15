@@ -5,7 +5,6 @@ import { AppSidebar } from "@/components/layout/AppSidebar";
 import { TopNavbar } from "@/components/layout/TopNavbar";
 import AIChatOverview from "@/components/ai/ai-chat-overview";
 import { VoiceProvider } from "@/lib/voice-context";
-import VoiceFAB from "@/components/ai/voice-fab";
 
 export default function DashboardLayout({
   children,
@@ -31,9 +30,6 @@ export default function DashboardLayout({
 
           {/* AI Chat FAB (text) — sits at bottom-right */}
           <AIChatOverview />
-
-          {/* Voice FAB (mic) — stacked above the chat FAB */}
-          <VoiceFAB />
         </div>
       </VoiceProvider>
     </ProtectedRoute>

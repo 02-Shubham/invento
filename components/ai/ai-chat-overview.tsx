@@ -1,34 +1,53 @@
 "use client";
 
 import { Button } from "@/components/ui/button";
-import { Bot } from "lucide-react";
+import { Bot, Mic, MicOff } from "lucide-react";
 import { useState } from "react";
 import AIChatWidget from "./ai-chat-widget";
+import { useVoice } from "@/lib/voice-context";
 
 export default function AIChatOverview() {
   const [isOpen, setIsOpen] = useState(false);
+  const { isSupported: isVoiceSupported, startRecording } = useVoice();
+
+  const handleMicClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setIsOpen(true);
+    setTimeout(() => {
+      startRecording();
+    }, 200);
+  };
 
   return (
     <>
-      {/* Floating Action Button — text chat (sits at bottom-right corner) */}
-      <div className={`fixed bottom-6 right-6 z-50 transition-all duration-300 ${isOpen ? 'scale-0 opacity-0' : 'scale-100 opacity-100'}`}>
-        <Button
-            onClick={() => setIsOpen(true)}
-            className="h-14 w-14 rounded-full shadow-lg bg-black hover:bg-neutral-800 text-white relative group"
+      {/* Universal Floating Input Pill (sits at bottom-right corner) */}
+      <div 
+        className={`fixed bottom-6 left-1/2 -translate-x-1/2 z-50 transition-all duration-300 ${
+          isOpen ? 'scale-0 opacity-0 pointer-events-none' : 'scale-100 opacity-100'
+        }`}
+      >
+        <div 
+          onClick={() => setIsOpen(true)}
+          className="flex items-center gap-3 bg-white border border-neutral-200 hover:border-neutral-300 shadow-xl rounded-full px-4 py-2 w-80 h-13 cursor-pointer group transition-all"
         >
-          <Bot className="h-6 w-6" />
+          <div className="h-8 w-8 rounded-full bg-black flex items-center justify-center text-white shrink-0">
+            <Bot className="h-4.5 w-4.5" />
+          </div>
           
-          {/* Badge */}
-          <span className="absolute -top-1 -right-1 flex h-4 w-4">
-            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-sky-400 opacity-75"></span>
-            <span className="relative inline-flex rounded-full h-4 w-4 bg-sky-500"></span>
+          <span className="flex-1 text-sm text-neutral-400 select-none">
+            Ask Invento AI...
           </span>
-          
-          {/* Tooltip on hover */}
-          <span className="absolute right-full mr-3 top-1/2 -translate-y-1/2 px-2 py-1 bg-white text-black text-xs font-medium rounded shadow-sm opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap border pointer-events-none">
-              Chat with AI
-          </span>
-        </Button>
+
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={handleMicClick}
+            className="h-8 w-8 rounded-full text-neutral-500 hover:text-black hover:bg-neutral-100 shrink-0"
+            title={isVoiceSupported ? "Talk to Invento" : "Voice commands not supported"}
+          >
+            {isVoiceSupported ? <Mic className="h-4 w-4" /> : <MicOff className="h-4 w-4" />}
+          </Button>
+        </div>
       </div>
 
       <AIChatWidget isOpen={isOpen} onClose={() => setIsOpen(false)} />

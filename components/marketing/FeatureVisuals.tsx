@@ -16,7 +16,7 @@ export const AgentsVisual = () => (
     <div className="relative w-full h-full min-h-[200px] bg-slate-50 rounded-lg p-4 overflow-hidden">
       <div className="absolute top-0 left-0 w-full h-full opacity-[0.03] bg-[radial-gradient(#3b82f6_1px,transparent_1px)] [background-size:16px_16px]" />
       <div className="space-y-3">
-        {[1, 2, 3].map((i) => (
+        {[1, 2, 3,4,5].map((i) => (
           <div key={i} className={`flex items-center gap-3 p-3 bg-white rounded-lg shadow-sm border border-slate-100 animate-in fade-in slide-in-from-bottom-4 duration-700`} style={{ animationDelay: `${i * 500}ms` }}>
             <div className={`w-8 h-8 rounded-full flex items-center justify-center ${i === 1 ? 'bg-blue-100 text-blue-600' : 'bg-slate-100 text-slate-500'}`}>
               <Bot className="w-4 h-4" />
