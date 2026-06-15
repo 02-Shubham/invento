@@ -22,19 +22,19 @@ export default function AIChatOverview() {
     <>
       {/* Universal Floating Input Pill (sits at bottom-right corner) */}
       <div 
-        className={`fixed bottom-6 left-1/2 -translate-x-1/2 z-50 transition-all duration-300 ${
+        className={`fixed bottom-6 left-1/2 -translate-x-1/2 z-50 transition-all duration-300 w-[calc(100%-2rem)] max-w-md md:max-w-xl ${
           isOpen ? 'scale-0 opacity-0 pointer-events-none' : 'scale-100 opacity-100'
         }`}
       >
         <div 
           onClick={() => setIsOpen(true)}
-          className="flex items-center gap-3 bg-white border border-neutral-200 hover:border-neutral-300 shadow-xl rounded-full px-4 py-2 w-80 h-13 cursor-pointer group transition-all"
+          className="flex items-center gap-3 bg-white border border-neutral-200 hover:border-neutral-300 shadow-xl rounded-full px-5 py-3 w-full h-14 cursor-pointer group transition-all"
         >
-          <div className="h-8 w-8 rounded-full bg-black flex items-center justify-center text-white shrink-0">
-            <Bot className="h-4.5 w-4.5" />
+          <div className="h-9 w-9 rounded-full bg-black flex items-center justify-center text-white shrink-0">
+            <Bot className="h-5 w-5" />
           </div>
           
-          <span className="flex-1 text-sm text-neutral-400 select-none">
+          <span className="flex-1 text-sm md:text-base text-neutral-400 select-none">
             Ask Invento AI...
           </span>
 
@@ -42,10 +42,10 @@ export default function AIChatOverview() {
             variant="ghost"
             size="icon"
             onClick={handleMicClick}
-            className="h-8 w-8 rounded-full text-neutral-500 hover:text-black hover:bg-neutral-100 shrink-0"
+            className="h-9 w-9 rounded-full text-neutral-500 hover:text-black hover:bg-neutral-100 shrink-0"
             title={isVoiceSupported ? "Talk to Invento" : "Voice commands not supported"}
           >
-            {isVoiceSupported ? <Mic className="h-4 w-4" /> : <MicOff className="h-4 w-4" />}
+            {isVoiceSupported ? <Mic className="h-4.5 w-4.5" /> : <MicOff className="h-4.5 w-4.5" />}
           </Button>
         </div>
       </div>
