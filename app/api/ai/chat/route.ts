@@ -1,173 +1,217 @@
-// AGENTIC FUNCTION CALLING FLOW:
-// 1. User sends message
-// 2. AI (OpenAI/Groq) analyzes and decides if tools needed
-// 3. If yes, returns tool_use blocks (doesn't execute them)
-// 4. We execute tools by calling our service functions
-// 5. Send tool results back to AI
-// 6. AI processes results — may call more tools (up to MAX_TOOL_ROUNDS)
-// 7. When AI returns text, we return the final response + tools used list
+// AGENTIC STREAMING FLOW:
+//
+// Phase 1 — Tool loop (non-streaming)
+//   User message → AI decides if tools needed
+//   If tools: execute → feed results back → repeat (max MAX_TOOL_ROUNDS)
+//   If direct text on round 1: no tools used, fake-stream the response
+//
+// Phase 2 — Streaming synthesis
+//   After tool loop finishes (messages[] has all tool results):
+//   → Call sendChatMessageStream() with enableTools: false
+//   → Pipe tokens as SSE: data: {"token":"…"}\n\n
+//   → Final event:        data: {"done":true,"toolsUsed":[…]}\n\n
+//
+// All responses (success) return Content-Type: text/event-stream.
+// Pre-stream errors (auth, missing key) return JSON with non-200 status.
 
 import { NextRequest, NextResponse } from "next/server";
-import { getCurrentUser, successResponse, errorResponse } from "@/lib/api-helpers";
-import { sendChatMessage } from "@/lib/ai-client";
+import { getCurrentUser, errorResponse } from "@/lib/api-helpers";
+import { sendChatMessage, sendChatMessageStream } from "@/lib/ai-client";
 import { executeToolFunction } from "@/lib/tool-executor";
 
-// Bug #2 fix: allow the AI to chain multiple tool calls instead of stopping
-// after a single round with a hardcoded fallback message.
 const MAX_TOOL_ROUNDS = 5;
 
-export async function POST(req: NextRequest) {
+const SSE_HEADERS = {
+  "Content-Type": "text/event-stream",
+  "Cache-Control": "no-cache, no-transform",
+  "X-Accel-Buffering": "no", // Disable Nginx buffering so tokens flush immediately
+} as const;
+
+/** Encode a JSON object as a single SSE data line */
+function sseEvent(payload: Record<string, unknown>): Uint8Array {
+  return new TextEncoder().encode(`data: ${JSON.stringify(payload)}\n\n`);
+}
+
+/** Fake-stream a pre-generated text string word-by-word with a small delay.
+ *  Used when AI responds with no tool calls (simple queries) — we already
+ *  have the full text but still want the streaming visual effect. */
+async function fakeStream(
+  text: string,
+  toolsUsed: string[],
+  controller: ReadableStreamDefaultController
+) {
+  // Split on whitespace boundaries, keeping the separators so spacing is preserved
+  const tokens = text.split(/(\s+)/);
+  for (const token of tokens) {
+    if (!token) continue;
+    controller.enqueue(sseEvent({ token }));
+    // ~20 ms between tokens ≈ smooth 50-word/sec reading pace
+    await new Promise(r => setTimeout(r, 20));
+  }
+  controller.enqueue(sseEvent({ done: true, toolsUsed }));
+  controller.close();
+}
+
+/** True-stream the final LLM synthesis after all tool results are in. */
+async function trueStream(
+  userId: string,
+  messages: any[],
+  toolsUsed: string[],
+  controller: ReadableStreamDefaultController
+) {
   try {
-    const userId = await getCurrentUser(req);
-    if (!userId) {
-      console.warn("[ChatAPI] No user ID found in headers");
-      return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
+    for await (const token of sendChatMessageStream({ userId, messages, enableTools: false, maxTokens: 4000 })) {
+      controller.enqueue(sseEvent({ token }));
+    }
+    controller.enqueue(sseEvent({ done: true, toolsUsed }));
+  } catch (err: any) {
+    controller.enqueue(sseEvent({ error: err.message || "Streaming failed" }));
+  } finally {
+    controller.close();
+  }
+}
+
+export async function POST(req: NextRequest) {
+  // ── Auth ─────────────────────────────────────────────────────────────────
+  const userId = await getCurrentUser(req);
+  if (!userId) {
+    console.warn("[ChatAPI] Unauthorized request");
+    return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
+  }
+
+  let body: any;
+  try {
+    body = await req.json();
+  } catch {
+    return NextResponse.json({ success: false, error: "Invalid JSON body" }, { status: 400 });
+  }
+
+  const { message, conversationHistory } = body;
+  if (!message) {
+    return NextResponse.json({ success: false, error: "Message is required" }, { status: 400 });
+  }
+
+  console.log(`[ChatAPI] user:${userId} | msg:"${String(message).substring(0, 60)}…"`);
+
+  // ── Build initial messages array ──────────────────────────────────────────
+  const history = Array.isArray(conversationHistory) ? conversationHistory : [];
+  let messages: any[] = [...history, { role: "user", content: message }];
+
+  const allToolsUsed: string[] = [];
+  // Track whether any tool call happened across all rounds
+  let toolCallsHappened = false;
+  // If AI responded with direct text on round 1 (no tools), store it here
+  let directText: string | null = null;
+
+  // ── Agentic tool loop (non-streaming) ────────────────────────────────────
+  try {
+    for (let round = 0; round < MAX_TOOL_ROUNDS; round++) {
+      console.log(`[ChatAPI] Round ${round + 1}/${MAX_TOOL_ROUNDS}`);
+
+      const response = await sendChatMessage({ userId, messages, enableTools: true, maxTokens: 4000 });
+
+      console.log(`[ChatAPI] Round ${round + 1} type: ${response.type}`);
+
+      if (response.type === "text") {
+        if (!toolCallsHappened) {
+          // Simple query — AI answered directly without any tools
+          directText = response.content;
+        }
+        // Either way, loop is done — we'll stream below
+        break;
+      }
+
+      if (response.type === "tool_use") {
+        toolCallsHappened = true;
+        const toolResults: any[] = [];
+
+        console.log(`[ChatAPI] Executing ${response.toolCalls.length} tool(s)`);
+
+        for (const toolCall of response.toolCalls) {
+          if (!allToolsUsed.includes(toolCall.name)) allToolsUsed.push(toolCall.name);
+          const result = await executeToolFunction(toolCall.name, toolCall.input, userId);
+          toolResults.push({ role: "tool", tool_call_id: toolCall.id, content: JSON.stringify(result) });
+        }
+
+        messages = [
+          ...messages,
+          {
+            role: "assistant",
+            content: null,
+            tool_calls: response.toolCalls.map(tc => ({
+              id: tc.id, type: "function",
+              function: { name: tc.name, arguments: JSON.stringify(tc.input) }
+            }))
+          },
+          ...toolResults
+        ];
+
+        continue;
+      }
     }
 
-    const body = await req.json();
-    const { message, conversationHistory } = body;
-    console.log(`[ChatAPI] Received request from user: ${userId} | Message: "${message?.substring(0, 50)}..."`);
+    // ── Streaming response ────────────────────────────────────────────────
+    //
+    // Case A: AI answered directly (no tools) → fake-stream the stored text
+    // Case B: Tools ran and loop ended → true-stream the LLM synthesis
+    // Case C: Hit MAX_TOOL_ROUNDS (still requesting tools) → summary + fake-stream
 
-    if (!message) {
-      return errorResponse("Message is required");
+    if (directText !== null) {
+      // Case A — fake-stream simple text response
+      const stream = new ReadableStream({
+        async start(controller) {
+          await fakeStream(directText!, [], controller);
+        }
+      });
+      return new Response(stream, { headers: SSE_HEADERS });
     }
 
-    // Build messages array
-    const history = Array.isArray(conversationHistory) ? conversationHistory : [];
-    
-    let messages = [
-        ...history,
-        { role: "user", content: message }
-    ] as any[];
-
-    // Track all tools used across the entire agentic loop
-    const allToolsUsed: string[] = [];
-
-    try {
-        // ── Agentic Loop ──────────────────────────────────────────────────────
-        // The AI can call tools multiple times (e.g. search_customer → search_product → create_invoice)
-        // We iterate until the AI returns a plain text response or we hit the safety cap.
-        for (let round = 0; round < MAX_TOOL_ROUNDS; round++) {
-            console.log(`[ChatAPI] Agentic round ${round + 1}/${MAX_TOOL_ROUNDS}`);
-
-            const response = await sendChatMessage({
-                userId,
-                messages,
-                enableTools: true,
-                // Bug #4 fix: pass 4000 explicitly so older callers that relied on the
-                // 1000-token default also get the higher limit here
-                maxTokens: 4000,
-            });
-
-            console.log(`[ChatAPI] Round ${round + 1} response type: ${response.type}`);
-
-            // ── Plain text response → done ─────────────────────────────────
-            if (response.type === "text") {
-                return successResponse({
-                    response: response.content,
-                    toolsUsed: allToolsUsed,
-                    timestamp: new Date()
-                });
-            }
-
-            // ── Tool use → execute all requested tools, feed results back ──
-            if (response.type === "tool_use") {
-                const toolResults: any[] = [];
-
-                console.log(`[ChatAPI] Executing ${response.toolCalls.length} tool call(s) in round ${round + 1}`);
-
-                for (const toolCall of response.toolCalls) {
-                    const toolName = toolCall.name;
-                    const toolInput = toolCall.input;
-
-                    if (!allToolsUsed.includes(toolName)) {
-                        allToolsUsed.push(toolName);
-                    }
-
-                    const result = await executeToolFunction(toolName, toolInput, userId);
-
-                    toolResults.push({
-                        role: "tool",
-                        tool_call_id: toolCall.id,
-                        content: JSON.stringify(result)
-                    });
-                }
-
-                // Append the assistant's tool-call turn + all results to history
-                // so the next round has full context.
-                messages = [
-                    ...messages,
-                    {
-                        role: "assistant",
-                        content: null,
-                        tool_calls: response.toolCalls.map(tc => ({
-                            id: tc.id,
-                            type: "function",
-                            function: {
-                                name: tc.name,
-                                arguments: JSON.stringify(tc.input)
-                            }
-                        }))
-                    },
-                    ...toolResults
-                ];
-
-                // Continue to next round
-                continue;
-            }
+    if (toolCallsHappened) {
+      // Case B — true streaming synthesis after tools resolved
+      const stream = new ReadableStream({
+        async start(controller) {
+          await trueStream(userId, messages, allToolsUsed, controller);
         }
-
-        // Safety: we hit MAX_TOOL_ROUNDS and the AI is still requesting tools.
-        // Ask the AI to summarise what it has done so far with the results it got.
-        console.warn(`[ChatAPI] Hit MAX_TOOL_ROUNDS (${MAX_TOOL_ROUNDS}) — requesting summary`);
-        const summaryResponse = await sendChatMessage({
-            userId,
-            messages: [
-                ...messages,
-                { role: "user", content: "Please summarise the information you found and what actions you've taken so far." }
-            ],
-            enableTools: false, // Don't allow more tools — force text answer
-            maxTokens: 4000,
-        });
-
-        return successResponse({
-            response: summaryResponse.type === "text"
-                ? summaryResponse.content
-                : "I've completed several steps. Please ask a follow-up question to continue.",
-            toolsUsed: allToolsUsed,
-            timestamp: new Date()
-        });
-
-    } catch (error: any) {
-        console.error("[ChatAPI] Logic error:", error);
-        if (error.message === "API_KEY_MISSING") {
-             return NextResponse.json({
-                 success: false,
-                 error: "API key not configured",
-                 message: "Please configure your AI API key in Settings.",
-                 settingsUrl: "/settings/api-keys"
-             }, { status: 400 });
-        }
-        if (error.message === "INVALID_API_KEY") {
-             return NextResponse.json({
-                 success: false,
-                 error: "Invalid API key",
-                 message: "Your authentication failed with the AI provider. Please check your API key."
-             }, { status: 400 });
-        }
-        if (error.message === "GROQ_KEY_MISSING") {
-            return NextResponse.json({
-                success: false,
-                error: "Server configuration error",
-                message: "The AI service is not configured on the server. Please contact support."
-            }, { status: 500 });
-        }
-        
-        return errorResponse(error.message || "AI Service Unavailable", 500);
+      });
+      return new Response(stream, { headers: SSE_HEADERS });
     }
+
+    // Case C — hit MAX_TOOL_ROUNDS, ask AI to summarise what it found
+    console.warn(`[ChatAPI] Hit MAX_TOOL_ROUNDS — requesting summary`);
+    const summaryResponse = await sendChatMessage({
+      userId,
+      messages: [...messages, { role: "user", content: "Please summarise the information you found and what actions you've taken so far." }],
+      enableTools: false,
+      maxTokens: 4000,
+    });
+    const summaryText = summaryResponse.type === "text"
+      ? summaryResponse.content
+      : "I've completed several steps. Please ask a follow-up question to continue.";
+
+    const stream = new ReadableStream({
+      async start(controller) {
+        await fakeStream(summaryText, allToolsUsed, controller);
+      }
+    });
+    return new Response(stream, { headers: SSE_HEADERS });
 
   } catch (error: any) {
-    console.error("Error in chat endpoint:", error);
-    return errorResponse("Internal server error", 500, error.message);
+    // Pre-stream errors: return JSON so the client can parse them
+    console.error("[ChatAPI] Error:", error.message);
+
+    const knownErrors: Record<string, { status: number; message: string }> = {
+      API_KEY_MISSING:   { status: 400, message: "Please configure your AI API key in Settings." },
+      INVALID_API_KEY:   { status: 400, message: "Your authentication failed with the AI provider. Please check your API key." },
+      GROQ_KEY_MISSING:  { status: 500, message: "The AI service is not configured on the server. Please contact support." },
+      RATE_LIMIT:        { status: 429, message: "Rate limit exceeded. Please wait a moment and try again." },
+      SETTINGS_NOT_FOUND:{ status: 400, message: "Please complete your account setup in Settings before using the AI." },
+    };
+
+    const known = knownErrors[error.message];
+    if (known) {
+      return NextResponse.json({ success: false, error: error.message, message: known.message }, { status: known.status });
+    }
+
+    return errorResponse(error.message || "AI Service Unavailable", 500);
   }
 }

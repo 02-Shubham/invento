@@ -7,8 +7,8 @@ import { AI_TOOLS } from './ai-tools-schema';
 interface ChatMessage {
   role: "user" | "assistant" | "system" | "tool";
   content: string | any[]; 
-  tool_call_id?: string; // For tool results
-  name?: string; // For tool results/calls
+  tool_call_id?: string;
+  name?: string;
 }
 
 interface ChatOptions {
@@ -57,154 +57,169 @@ export type AIResponse =
   | { type: "text"; content: string }
   | { type: "tool_use"; toolCalls: any[]; messageId: string };
 
+// ── Helper: build provider-agnostic client & settings ────────────────────────
+
+async function resolveProvider(userId: string) {
+  const settings = await firestoreService.getUserSettings(userId) as UserSettings;
+  if (!settings) throw new Error("SETTINGS_NOT_FOUND");
+  const rawProvider = settings.aiProvider || 'groq';
+  const provider = rawProvider === 'google' ? 'groq' : rawProvider;
+  return { settings, provider };
+}
+
+function buildOpenAIMessages(messages: ChatMessage[], systemPrompt: string) {
+  return [
+    { role: "system", content: systemPrompt },
+    ...messages.filter(m => m.role !== 'system').map(m => {
+      if (m.role === 'tool') {
+        return { role: 'tool', tool_call_id: m.tool_call_id!, content: m.content as string };
+      }
+      return { role: m.role, content: m.content, tool_calls: (m as any).tool_calls };
+    })
+  ] as any[];
+}
+
+// ── Non-streaming chat (used by agentic tool loop) ───────────────────────────
+
 export async function sendChatMessage(options: ChatOptions): Promise<AIResponse> {
-    // Bug #4 fix: raised default maxTokens from 1000 → 4000 to prevent
-    // tool result truncation on complex queries (revenue reports, large inventories, etc.)
-    const { userId, messages, systemPrompt = AGENTIC_SYSTEM_PROMPT, maxTokens = 4000, enableTools = false } = options;
+  const { userId, messages, systemPrompt = AGENTIC_SYSTEM_PROMPT, maxTokens = 4000, enableTools = false } = options;
 
-    console.log(`[AI-Client] Starting chat for user: ${userId} | Tools enabled: ${enableTools}`);
+  console.log(`[AI-Client] sendChatMessage | user: ${userId} | tools: ${enableTools}`);
 
-    // 1. Get Settings
-    const settings = await firestoreService.getUserSettings(userId) as UserSettings;
-    
-    if (!settings) {
-        console.error("[AI-Client] User settings not found");
-        throw new Error("SETTINGS_NOT_FOUND");
+  const { settings, provider } = await resolveProvider(userId);
+
+  if (provider === 'openai') {
+    if (!settings.aiApiKey) throw new Error("API_KEY_MISSING");
+    const client = new OpenAI({ apiKey: settings.aiApiKey.trim(), dangerouslyAllowBrowser: false });
+    const model = settings.aiModel || 'gpt-4-turbo';
+
+    try {
+      const response = await client.chat.completions.create({
+        model,
+        messages: buildOpenAIMessages(messages, systemPrompt),
+        max_tokens: maxTokens,
+        tools: enableTools ? AI_TOOLS : undefined,
+        tool_choice: enableTools ? "auto" : "none",
+      });
+
+      const msg = response.choices[0].message;
+      if (msg.tool_calls && msg.tool_calls.length > 0) {
+        return {
+          type: "tool_use",
+          toolCalls: msg.tool_calls.map((tc: any) => ({
+            id: tc.id, name: tc.function.name,
+            input: JSON.parse(tc.function.arguments), type: 'function'
+          })),
+          messageId: response.id
+        };
+      }
+      return { type: "text", content: msg.content || "" };
+    } catch (error: any) {
+      if (error.status === 401) throw new Error("INVALID_API_KEY");
+      if (error.status === 429) throw new Error("RATE_LIMIT");
+      throw new Error(error.message || "OpenAI Service Failed");
     }
+  }
 
-    // Map legacy 'google' provider to 'groq' for backward compatibility
-    const rawProvider = settings.aiProvider || 'groq';
-    const provider = rawProvider === 'google' ? 'groq' : rawProvider;
-    
-    // --- OPENAI LOGIC ---
-    if (provider === 'openai') {
-        if (!settings.aiApiKey) {
-             throw new Error("API_KEY_MISSING");
-        }
-        const apiKey = settings.aiApiKey.trim();
-        const model = settings.aiModel || 'gpt-4-turbo';
+  if (provider === 'groq') {
+    const apiKey = process.env.GROQ_API_KEY;
+    if (!apiKey) throw new Error("GROQ_KEY_MISSING");
+    const client = new Groq({ apiKey });
+    const model = 'llama-3.3-70b-versatile';
 
-        try {
-            const client = new OpenAI({ apiKey, dangerouslyAllowBrowser: false });
-            
-            const openAIMessages = [
-                { role: "system", content: systemPrompt },
-                ...messages.filter(m => m.role !== 'system').map(m => {
-                    if (m.role === 'tool') {
-                       return {
-                           role: 'tool',
-                           tool_call_id: m.tool_call_id!,
-                           content: m.content as string
-                       };
-                    }
-                    return {
-                        role: m.role,
-                        content: m.content,
-                        tool_calls: (m as any).tool_calls
-                    };
-                })
-            ] as any;
+    try {
+      const response = await client.chat.completions.create({
+        model,
+        messages: buildOpenAIMessages(messages, systemPrompt) as any,
+        max_tokens: maxTokens,
+        tools: enableTools ? AI_TOOLS as any : undefined,
+        tool_choice: enableTools ? "auto" : "none",
+      });
 
-            console.log(`[AI-Client] Sending to OpenAI (${model})...`);
-            const response = await client.chat.completions.create({
-                model: model,
-                messages: openAIMessages,
-                max_tokens: maxTokens,
-                tools: enableTools ? AI_TOOLS : undefined,
-                tool_choice: enableTools ? "auto" : "none" 
-            });
-
-            const choice = response.choices[0];
-            const message = choice.message;
-
-            if (message.tool_calls && message.tool_calls.length > 0) {
-                return {
-                    type: "tool_use",
-                    toolCalls: message.tool_calls.map((tc: any) => ({
-                        id: tc.id,
-                        name: tc.function.name,
-                        input: JSON.parse(tc.function.arguments),
-                        type: 'function'
-                    })),
-                    messageId: response.id
-                };
-            } else {
-                return { type: "text", content: message.content || "" };
-            }
-        } catch (error: any) {
-             console.error("[AI-Client] OpenAI Error:", error);
-             if (error.status === 401) throw new Error("INVALID_API_KEY");
-             if (error.status === 429) throw new Error("RATE_LIMIT");
-             throw new Error(error.message || "OpenAI Service Failed");
-        }
-    } 
-    
-    // --- GROQ LOGIC ---
-    else if (provider === 'groq') {
-        const apiKey = process.env.GROQ_API_KEY;
-        if (!apiKey) {
-            console.error("[AI-Client] GROQ_API_KEY missing in environment variables");
-            throw new Error("GROQ_KEY_MISSING");
-        }
-
-        // llama-3.3-70b-versatile has excellent tool-calling support and is very fast
-        const model = 'llama-3.3-70b-versatile';
-
-        try {
-            const client = new Groq({ apiKey });
-
-            // Groq uses the OpenAI-compatible format — same message & tool structure
-            const groqMessages = [
-                { role: "system", content: systemPrompt },
-                ...messages.filter(m => m.role !== 'system').map(m => {
-                    if (m.role === 'tool') {
-                        return {
-                            role: 'tool' as const,
-                            tool_call_id: m.tool_call_id!,
-                            content: m.content as string
-                        };
-                    }
-                    return {
-                        role: m.role as any,
-                        content: m.content,
-                        tool_calls: (m as any).tool_calls
-                    };
-                })
-            ] as any;
-
-            console.log(`[AI-Client] Sending to Groq (${model})...`);
-            const response = await client.chat.completions.create({
-                model,
-                messages: groqMessages,
-                max_tokens: maxTokens,
-                tools: enableTools ? AI_TOOLS as any : undefined,
-                tool_choice: enableTools ? "auto" : "none"
-            });
-
-            const choice = response.choices[0];
-            const message = choice.message;
-
-            if (message.tool_calls && message.tool_calls.length > 0) {
-                return {
-                    type: "tool_use",
-                    toolCalls: message.tool_calls.map((tc: any) => ({
-                        id: tc.id,
-                        name: tc.function.name,
-                        input: JSON.parse(tc.function.arguments),
-                        type: 'function'
-                    })),
-                    messageId: response.id
-                };
-            } else {
-                return { type: "text", content: message.content || "" };
-            }
-        } catch (error: any) {
-            console.error("[AI-Client] Groq Error:", error);
-            if (error.status === 401) throw new Error("INVALID_API_KEY");
-            if (error.status === 429) throw new Error("RATE_LIMIT");
-            throw new Error(error.message || "Groq Service Failed");
-        }
+      const msg = response.choices[0].message;
+      if (msg.tool_calls && msg.tool_calls.length > 0) {
+        return {
+          type: "tool_use",
+          toolCalls: msg.tool_calls.map((tc: any) => ({
+            id: tc.id, name: tc.function.name,
+            input: JSON.parse(tc.function.arguments), type: 'function'
+          })),
+          messageId: response.id
+        };
+      }
+      return { type: "text", content: msg.content || "" };
+    } catch (error: any) {
+      if (error.status === 401) throw new Error("INVALID_API_KEY");
+      if (error.status === 429) throw new Error("RATE_LIMIT");
+      throw new Error(error.message || "Groq Service Failed");
     }
+  }
 
-    throw new Error("INVALID_PROVIDER");
+  throw new Error("INVALID_PROVIDER");
+}
+
+// ── Streaming chat (used for final text synthesis after tool loop) ────────────
+//
+// Returns an AsyncGenerator that yields string tokens one at a time.
+// enableTools is always false here — this is pure text synthesis.
+//
+export async function* sendChatMessageStream(options: ChatOptions): AsyncGenerator<string> {
+  const { userId, messages, systemPrompt = AGENTIC_SYSTEM_PROMPT, maxTokens = 4000 } = options;
+
+  console.log(`[AI-Client] sendChatMessageStream | user: ${userId}`);
+
+  const { settings, provider } = await resolveProvider(userId);
+
+  if (provider === 'openai') {
+    if (!settings.aiApiKey) throw new Error("API_KEY_MISSING");
+    const client = new OpenAI({ apiKey: settings.aiApiKey.trim(), dangerouslyAllowBrowser: false });
+    const model = settings.aiModel || 'gpt-4-turbo';
+
+    try {
+      const stream = await client.chat.completions.create({
+        model,
+        messages: buildOpenAIMessages(messages, systemPrompt),
+        max_tokens: maxTokens,
+        stream: true,
+      });
+
+      for await (const chunk of stream) {
+        const token = chunk.choices[0]?.delta?.content;
+        if (token) yield token;
+      }
+    } catch (error: any) {
+      if (error.status === 401) throw new Error("INVALID_API_KEY");
+      if (error.status === 429) throw new Error("RATE_LIMIT");
+      throw new Error(error.message || "OpenAI Streaming Failed");
+    }
+    return;
+  }
+
+  if (provider === 'groq') {
+    const apiKey = process.env.GROQ_API_KEY;
+    if (!apiKey) throw new Error("GROQ_KEY_MISSING");
+    const client = new Groq({ apiKey });
+    const model = 'llama-3.3-70b-versatile';
+
+    try {
+      const stream = await client.chat.completions.create({
+        model,
+        messages: buildOpenAIMessages(messages, systemPrompt) as any,
+        max_tokens: maxTokens,
+        stream: true,
+      });
+
+      for await (const chunk of stream) {
+        const token = (chunk as any).choices[0]?.delta?.content;
+        if (token) yield token;
+      }
+    } catch (error: any) {
+      if (error.status === 401) throw new Error("INVALID_API_KEY");
+      if (error.status === 429) throw new Error("RATE_LIMIT");
+      throw new Error(error.message || "Groq Streaming Failed");
+    }
+    return;
+  }
+
+  throw new Error("INVALID_PROVIDER");
 }
