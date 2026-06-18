@@ -189,10 +189,13 @@ export interface Supplier {
 export interface UserSettings {
   id?: string;
   userId: string;
-  aiProvider: 'openai' | 'google';
+  aiProvider: 'openai' | 'google' | 'groq';
   aiApiKey?: string;
   aiApiKeySet?: boolean; // UI flag
   aiKeyLastUpdated?: Date;
   aiModel?: string;
+  // Tax rate applied to invoices (0–100, as a percentage). E.g. 18 = 18% GST.
+  // Defaults to 0 if not configured.
+  taxRate?: number;
   updatedAt?: Date;
 }

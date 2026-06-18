@@ -1,5 +1,5 @@
 import { firestoreService } from "@/lib/firestore-service";
-import { Product } from "@/types";
+import { Product, UserSettings } from "@/types";
 
 interface ToolResult {
   success: boolean;
@@ -274,6 +274,10 @@ async function executeCreateInvoice(
       return { success: false, error: "Customer not found" };
     }
 
+    // Bug #5 fix: read tax rate from user settings instead of hardcoding 0
+    const settings = await firestoreService.getUserSettings(userId) as UserSettings | null;
+    const taxRatePct = (settings?.taxRate ?? 0); // percentage, e.g. 18 for 18%
+
     const allProducts = await firestoreService.getProducts(userId);
     const invoiceItems = [];
     let subtotal = 0;
@@ -303,7 +307,8 @@ async function executeCreateInvoice(
       });
     }
 
-    const total = subtotal;
+    const taxAmount = parseFloat(((subtotal * taxRatePct) / 100).toFixed(2));
+    const total = parseFloat((subtotal + taxAmount).toFixed(2));
     const invoiceNumber = `INV-${Date.now().toString().slice(-6)}`;
 
     const newInvoiceData: any = {
@@ -315,7 +320,7 @@ async function executeCreateInvoice(
       items: invoiceItems,
       total,
       subtotal,
-      tax: 0,
+      tax: taxAmount,
       balanceAmount: total,
       paidAmount: 0,
       status: 'pending',
@@ -339,6 +344,9 @@ async function executeCreateInvoice(
         invoiceId,
         invoiceNumber,
         customerName: customer.name,
+        subtotal,
+        taxAmount,
+        taxRate: taxRatePct,
         totalAmount: total,
         balanceAmount: total,
         itemsCount: items.length,

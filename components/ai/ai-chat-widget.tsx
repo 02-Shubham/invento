@@ -1,12 +1,13 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import { useAuth } from "@/lib/auth-context";
+import { firestoreService } from "@/lib/firestore-service";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Send, Loader2, Bot, AlertTriangle, Sparkles, X, Wrench, Mic, Square, MicOff } from "lucide-react";
+import { Send, Loader2, Bot, AlertTriangle, Sparkles, X, Wrench, Mic, Square, MicOff, Plus, Trash2 } from "lucide-react";
 import Link from "next/link";
 import { Badge } from "@/components/ui/badge";
 import { useVoice } from "@/lib/voice-context";
@@ -23,6 +24,18 @@ interface Message {
 interface AIChatWidgetProps {
   isOpen: boolean;
   onClose: () => void;
+}
+
+const generateId = () => Math.random().toString(36).substring(2, 9);
+
+// Debounce helper: save conversation max once per N ms to avoid Firestore hammering
+function useDebounce<T>(value: T, delay: number): T {
+  const [debounced, setDebounced] = useState<T>(value);
+  useEffect(() => {
+    const t = setTimeout(() => setDebounced(value), delay);
+    return () => clearTimeout(t);
+  }, [value, delay]);
+  return debounced;
 }
 
 export default function AIChatWidget({ isOpen, onClose }: AIChatWidgetProps) {
@@ -42,17 +55,82 @@ export default function AIChatWidget({ isOpen, onClose }: AIChatWidgetProps) {
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<{message: string, type?: string} | null>(null);
+
+  // Bug #6: conversation persistence state
+  const [conversationId, setConversationId] = useState<string | null>(null);
+  const [conversationTitle, setConversationTitle] = useState<string>("New Chat");
+  const [isSaving, setIsSaving] = useState(false);
+
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  // Sync input text with partial voice transcript
+  // ── Bug #6: Persist messages to Firestore (debounced, 2 s) ──────────────────
+  const debouncedMessages = useDebounce(messages, 2000);
+
+  const persistConversation = useCallback(
+    async (msgs: Message[], cId: string, title: string) => {
+      if (!user || msgs.length === 0) return;
+      try {
+        setIsSaving(true);
+        await firestoreService.saveConversation(user.uid, cId, {
+          title,
+          messages: msgs.map(m => ({
+            id: m.id,
+            role: m.role,
+            content: m.content,
+            timestamp: m.timestamp.toISOString(),
+            toolsUsed: m.toolsUsed ?? [],
+          })),
+        });
+      } catch (err) {
+        console.error("[ChatWidget] Failed to persist conversation:", err);
+      } finally {
+        setIsSaving(false);
+      }
+    },
+    [user]
+  );
+
+  useEffect(() => {
+    if (debouncedMessages.length > 0 && conversationId) {
+      persistConversation(debouncedMessages, conversationId, conversationTitle);
+    }
+  }, [debouncedMessages, conversationId, conversationTitle, persistConversation]);
+
+  // ── Start a new conversation ────────────────────────────────────────────────
+  const startNewConversation = useCallback(() => {
+    setMessages([]);
+    setError(null);
+    setInput("");
+    const newId = generateId() + generateId(); // 14-char random ID
+    setConversationId(newId);
+    setConversationTitle("New Chat");
+  }, []);
+
+  // Initialise a conversation ID on first open
+  useEffect(() => {
+    if (isOpen && !conversationId) {
+      startNewConversation();
+    }
+  }, [isOpen, conversationId, startNewConversation]);
+
+  // ── Derive conversation title from first user message ──────────────────────
+  useEffect(() => {
+    if (messages.length === 1 && messages[0].role === "user" && conversationTitle === "New Chat") {
+      const firstMsg = messages[0].content;
+      const title = firstMsg.length > 50 ? firstMsg.slice(0, 47) + "…" : firstMsg;
+      setConversationTitle(title);
+    }
+  }, [messages, conversationTitle]);
+
+  // ── Sync input text with partial voice transcript ───────────────────────────
   useEffect(() => {
     if (isRecording) {
       setInput(partialText || "Listening...");
     }
   }, [isRecording, partialText]);
 
-  // Handle voice response
+  // ── Handle voice response ───────────────────────────────────────────────────
   useEffect(() => {
     if (!lastResponse) return;
 
@@ -60,21 +138,10 @@ export default function AIChatWidget({ isOpen, onClose }: AIChatWidgetProps) {
     const aiMsgId = generateId();
 
     if (lastResponse.intent === "QUERY" && lastResponse.answer) {
-      const answerText = lastResponse.answer;
       setMessages(prev => [
         ...prev,
-        {
-          id: userMsgId,
-          role: "user",
-          content: input || "Voice query",
-          timestamp: new Date()
-        },
-        {
-          id: aiMsgId,
-          role: "assistant",
-          content: answerText,
-          timestamp: new Date()
-        }
+        { id: userMsgId, role: "user", content: input || "Voice query", timestamp: new Date() },
+        { id: aiMsgId, role: "assistant", content: lastResponse.answer!, timestamp: new Date() }
       ]);
       setInput("");
       clearResponse();
@@ -94,44 +161,27 @@ export default function AIChatWidget({ isOpen, onClose }: AIChatWidgetProps) {
 
       setMessages(prev => [
         ...prev,
-        {
-          id: userMsgId,
-          role: "user",
-          content: input || "Voice command",
-          timestamp: new Date()
-        },
-        {
-          id: aiMsgId,
-          role: "assistant",
-          content: actionText,
-          timestamp: new Date()
-        }
+        { id: userMsgId, role: "user", content: input || "Voice command", timestamp: new Date() },
+        { id: aiMsgId, role: "assistant", content: actionText, timestamp: new Date() }
       ]);
       setInput("");
       clearResponse();
     }
-  }, [lastResponse, clearResponse]);
+  }, [lastResponse, clearResponse]); // intentionally omits `input` to avoid stale closure re-runs
 
-  useEffect(() => {
-      if (user) {
-          console.log("🐛 DEBUG - YOUR USER ID IS:", user.uid);
-      }
-  }, [user]);
-
-  // Auto-scroll to bottom
+  // ── Auto-scroll to bottom ───────────────────────────────────────────────────
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, loading]);
 
-  // Focus input on open
+  // ── Focus input on open ─────────────────────────────────────────────────────
   useEffect(() => {
     if (isOpen && inputRef.current) {
-         setTimeout(() => inputRef.current?.focus(), 100);
+      setTimeout(() => inputRef.current?.focus(), 100);
     }
   }, [isOpen]);
 
-  const generateId = () => Math.random().toString(36).substring(2, 9);
-
+  // ── Send message ────────────────────────────────────────────────────────────
   const sendMessage = async () => {
     if (!input.trim() || loading) return;
 
@@ -152,7 +202,7 @@ export default function AIChatWidget({ isOpen, onClose }: AIChatWidgetProps) {
         method: "POST",
         headers: { 
             "Content-Type": "application/json",
-            "x-user-id": user?.uid || "" // Pass user ID for API helper
+            "x-user-id": user?.uid || ""
         },
         body: JSON.stringify({
           message: userMessage.content,
@@ -169,7 +219,7 @@ export default function AIChatWidget({ isOpen, onClose }: AIChatWidgetProps) {
       const aiMessage: Message = {
         id: generateId(),
         role: "assistant",
-        content: data.response || data.data?.response, // Handle standardized wrapper or direct
+        content: data.response || data.data?.response,
         timestamp: new Date(),
         toolsUsed: data.toolsUsed || []
       };
@@ -181,10 +231,9 @@ export default function AIChatWidget({ isOpen, onClose }: AIChatWidgetProps) {
       let type = "general";
       
       if (err.message.includes("API key")) {
-          // Keep specific message but set type for UI action
           type = "api_key";
       } else if (err.message.includes("RATE_LIMIT") || err.message.includes("quota")) {
-          errorMsg = "OpenAI Rate Limit Exceeded. Please check your usage/billing.";
+          errorMsg = "Rate limit exceeded. Please wait a moment and try again.";
           type = "rate_limit";
       }
       
@@ -208,7 +257,7 @@ export default function AIChatWidget({ isOpen, onClose }: AIChatWidgetProps) {
   ];
 
   const handlePromptClick = (prompt: string) => {
-      setInput(prompt);
+    setInput(prompt);
   };
 
   return (
@@ -237,13 +286,25 @@ export default function AIChatWidget({ isOpen, onClose }: AIChatWidgetProps) {
                 <h3 className="font-semibold text-sm">Invento Assistant</h3>
                 <p className="text-xs text-green-600 flex items-center">
                     <span className="block h-1.5 w-1.5 rounded-full bg-green-500 mr-1.5"></span>
-                    Online
+                    {isSaving ? "Saving…" : "Online"}
                 </p>
             </div>
         </div>
-        <Button variant="ghost" size="icon" className="h-8 w-8 text-neutral-500 hover:text-black" onClick={onClose}>
-            <X className="h-4 w-4" />
-        </Button>
+        <div className="flex items-center gap-1">
+            {/* New chat button */}
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8 text-neutral-500 hover:text-black"
+              title="Start new conversation"
+              onClick={startNewConversation}
+            >
+              <Plus className="h-4 w-4" />
+            </Button>
+            <Button variant="ghost" size="icon" className="h-8 w-8 text-neutral-500 hover:text-black" onClick={onClose}>
+                <X className="h-4 w-4" />
+            </Button>
+        </div>
       </div>
 
       {/* Messages Area */}
@@ -301,7 +362,7 @@ export default function AIChatWidget({ isOpen, onClose }: AIChatWidgetProps) {
                                     {msg.toolsUsed.map((tool, idx) => (
                                         <Badge key={idx} variant="secondary" className="text-[10px] bg-blue-50 text-blue-700 border-blue-100 px-2 py-0.5 h-5 font-normal flex items-center gap-1">
                                             <Wrench className="h-3 w-3" />
-                                            Used: {tool.replace('_', ' ')}
+                                            Used: {tool.replace(/_/g, ' ')}
                                         </Badge>
                                     ))}
                                 </div>
@@ -318,7 +379,6 @@ export default function AIChatWidget({ isOpen, onClose }: AIChatWidgetProps) {
                             <AvatarFallback className="bg-neutral-100 text-neutral-500"><Bot className="h-4 w-4" /></AvatarFallback>
                         </Avatar>
                         <div className="bg-neutral-50 p-3 rounded-2xl rounded-tl-sm flex items-center gap-1">
-                            {/* Assuming we might know if tools are being used via streaming later, but for now just showing activity */}
                              <div className="w-1.5 h-1.5 bg-neutral-400 rounded-full animate-bounce [animation-delay:-0.3s]"></div>
                              <div className="w-1.5 h-1.5 bg-neutral-400 rounded-full animate-bounce [animation-delay:-0.15s]"></div>
                              <div className="w-1.5 h-1.5 bg-neutral-400 rounded-full animate-bounce"></div>
@@ -364,7 +424,7 @@ export default function AIChatWidget({ isOpen, onClose }: AIChatWidgetProps) {
               <Button
                   variant="ghost"
                   size="icon"
-                  className={`absolute right-1.5 top-1/2 -translate-y-1/2 h-8 w-8 rounded-full ${isRecording ? 'text-red-500 bg-red-50 animate-pulse' : 'text-neutral-500 hover:text-black hover:bg-neutral-105'}`}
+                  className={`absolute right-1.5 top-1/2 -translate-y-1/2 h-8 w-8 rounded-full ${isRecording ? 'text-red-500 bg-red-50 animate-pulse' : 'text-neutral-500 hover:text-black hover:bg-neutral-100'}`}
                   onClick={() => {
                     if (!isVoiceSupported) return;
                     if (isRecording) {
@@ -381,7 +441,7 @@ export default function AIChatWidget({ isOpen, onClose }: AIChatWidgetProps) {
             </div>
             <Button 
                 onClick={sendMessage} 
-                className="h-11 w-11 shrink-0 rounded-lg" // Square-ish button looks modern
+                className="h-11 w-11 shrink-0 rounded-lg"
                 disabled={!input.trim() || loading || isRecording}
             >
                 {loading ? <Loader2 className="h-5 w-5 animate-spin" /> : <Send className="h-5 w-5" />}

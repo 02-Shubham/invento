@@ -765,6 +765,87 @@ export const firestoreService = {
          console.error("Error updating user settings:", error);
          throw error;
      }
-  }
+  },
+
+  // --- Conversations (AI Chat History) ---
+
+  /** Save or update a conversation for a user. Creates if new, merges if existing. */
+  async saveConversation(
+    userId: string,
+    conversationId: string,
+    data: { title: string; messages: any[] }
+  ) {
+    try {
+      const docRef = doc(db, "conversations", conversationId);
+      await import("firebase/firestore").then(({ setDoc }) =>
+        setDoc(
+          docRef,
+          { ...data, userId, updatedAt: serverTimestamp() },
+          { merge: true }
+        )
+      );
+    } catch (error) {
+      console.error("Error saving conversation:", error);
+      throw error;
+    }
+  },
+
+  /** List the most recent conversations for a user, newest first. */
+  async getConversations(userId: string, limitCount = 20) {
+    try {
+      const q = query(
+        collection(db, "conversations"),
+        where("userId", "==", userId),
+        orderBy("updatedAt", "desc")
+      );
+      const snapshot = await getDocs(q);
+      const all = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+      return all.slice(0, limitCount) as Array<{
+        id: string;
+        userId: string;
+        title: string;
+        messages: any[];
+        updatedAt: any;
+      }>;
+    } catch (error) {
+      console.error("Error fetching conversations:", error);
+      throw error;
+    }
+  },
+
+  /** Fetch a single conversation by ID (with ownership check). */
+  async getConversationById(conversationId: string, userId: string) {
+    try {
+      const docRef = doc(db, "conversations", conversationId);
+      const snap = await getDoc(docRef);
+      if (!snap.exists() || snap.data().userId !== userId) return null;
+      return { id: snap.id, ...snap.data() } as {
+        id: string;
+        userId: string;
+        title: string;
+        messages: any[];
+        updatedAt: any;
+      };
+    } catch (error) {
+      console.error("Error fetching conversation:", error);
+      throw error;
+    }
+  },
+
+  /** Delete a conversation (with ownership check). */
+  async deleteConversation(conversationId: string, userId: string) {
+    try {
+      const docRef = doc(db, "conversations", conversationId);
+      const snap = await getDoc(docRef);
+      if (!snap.exists() || snap.data().userId !== userId) {
+        throw new Error("Unauthorized");
+      }
+      await deleteDoc(docRef);
+    } catch (error) {
+      console.error("Error deleting conversation:", error);
+      throw error;
+    }
+  },
 
 };
+

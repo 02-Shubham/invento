@@ -1,16 +1,20 @@
-// FUNCTION CALLING FLOW:
+// AGENTIC FUNCTION CALLING FLOW:
 // 1. User sends message
-// 2. AI (OpenAI/Gemini) analyzes and decides if tools needed
+// 2. AI (OpenAI/Groq) analyzes and decides if tools needed
 // 3. If yes, returns tool_use blocks (doesn't execute them)
-// 4. We execute tools by calling our APIs
+// 4. We execute tools by calling our service functions
 // 5. Send tool results back to AI
-// 6. AI processes results and responds to user
-// 7. User sees final response + indicator that tools were used
+// 6. AI processes results — may call more tools (up to MAX_TOOL_ROUNDS)
+// 7. When AI returns text, we return the final response + tools used list
 
 import { NextRequest, NextResponse } from "next/server";
 import { getCurrentUser, successResponse, errorResponse } from "@/lib/api-helpers";
 import { sendChatMessage } from "@/lib/ai-client";
 import { executeToolFunction } from "@/lib/tool-executor";
+
+// Bug #2 fix: allow the AI to chain multiple tool calls instead of stopping
+// after a single round with a hardcoded fallback message.
+const MAX_TOOL_ROUNDS = 5;
 
 export async function POST(req: NextRequest) {
   try {
@@ -22,7 +26,7 @@ export async function POST(req: NextRequest) {
 
     const body = await req.json();
     const { message, conversationHistory } = body;
-    console.log(`[ChatAPI] Received request from user: ${userId} | Message: "${message?.substring(0, 20)}..."`);
+    console.log(`[ChatAPI] Received request from user: ${userId} | Message: "${message?.substring(0, 50)}..."`);
 
     if (!message) {
       return errorResponse("Message is required");
@@ -31,104 +35,111 @@ export async function POST(req: NextRequest) {
     // Build messages array
     const history = Array.isArray(conversationHistory) ? conversationHistory : [];
     
-    // Valid history check (relaxed for now to allow more complex objects later if needed, but keeping basic check)
-    // The previous check was too strict for generic objects if we expand history schema
-    
-    const messages = [
+    let messages = [
         ...history,
         { role: "user", content: message }
     ] as any[];
 
+    // Track all tools used across the entire agentic loop
+    const allToolsUsed: string[] = [];
+
     try {
-        // First AI call - with tools enabled
-        const response = await sendChatMessage({
-            userId,
-            messages,
-            enableTools: true
-        });
-        
-        console.log(`[ChatAPI] Initial AI response type: ${response.type}`);
+        // ── Agentic Loop ──────────────────────────────────────────────────────
+        // The AI can call tools multiple times (e.g. search_customer → search_product → create_invoice)
+        // We iterate until the AI returns a plain text response or we hit the safety cap.
+        for (let round = 0; round < MAX_TOOL_ROUNDS; round++) {
+            console.log(`[ChatAPI] Agentic round ${round + 1}/${MAX_TOOL_ROUNDS}`);
 
-        // Check if AI wants to use tools
-        if (response.type === "tool_use") {
-            // Execute each tool the AI requested
-            const toolResults = [];
-            const toolsUsedNames = [];
-
-            console.log(`[ChatAPI] Processing ${response.toolCalls.length} tool calls`);
-
-            for (const toolCall of response.toolCalls) {
-                const toolName = toolCall.name;
-                const toolInput = toolCall.input;
-                toolsUsedNames.push(toolName);
-                
-                // Call the actual tool function
-                const result = await executeToolFunction(toolName, toolInput, userId);
-                
-                toolResults.push({
-                    type: "tool_result",
-                    tool_use_id: toolCall.id,
-                    content: JSON.stringify(result)
-                });
-            }
-
-            // Send tool results back to the AI
-            // We need to add the AI's tool use request AND the results to history
-            const secondResponse = await sendChatMessage({
+            const response = await sendChatMessage({
                 userId,
-                messages: [
-                    ...messages,
-                    { role: "assistant", content: null, tool_calls: response.toolCalls.map(tc => ({
-                        id: tc.id,
-                        type: 'function',
-                        function: {
-                            name: tc.name,
-                            arguments: JSON.stringify(tc.input)
-                        }
-                    })) }, // Correctly format assistant's tool_use message for OpenAI
-                    ...toolResults.map(tr => ({
-                        role: "tool",
-                        tool_call_id: tr.tool_use_id,
-                        content: tr.content
-                    }))
-                ],
-                enableTools: true // Keep tools enabled for potential follow-ups (though usually one turn is enough for now)
+                messages,
+                enableTools: true,
+                // Bug #4 fix: pass 4000 explicitly so older callers that relied on the
+                // 1000-token default also get the higher limit here
+                maxTokens: 4000,
             });
 
-            // If the second response is ALSO a tool use, we might need a loop. 
-            // For this phase, we'll assume a single turn of tool usage is sufficient or handle just text response.
-            // If it tries to use tools AGAIN, we'd need recursion. For simplicity, if it returns tools again,
-            // we might just return the text part if available or error.
-            // But typical flow: User -> AI Tool Call -> Tool Result -> AI Text Response.
-            
-            if (secondResponse.type === "tool_use") {
-                // Edge case: AI wants to use tool again immediately. 
-                // For MVP Phase 3, let's just return a generic message or handle it if we want to be fancy.
-                // Let's assume it returns text 99% of time after getting results.
-                // If it really returns tools, we'll just format the partial output we have or error.
-                 return successResponse({
-                    response: "I need to perform more actions, but I am limited to one step for now.",
-                    toolsUsed: toolsUsedNames,
+            console.log(`[ChatAPI] Round ${round + 1} response type: ${response.type}`);
+
+            // ── Plain text response → done ─────────────────────────────────
+            if (response.type === "text") {
+                return successResponse({
+                    response: response.content,
+                    toolsUsed: allToolsUsed,
                     timestamp: new Date()
                 });
             }
 
-            return successResponse({
-                response: secondResponse.content,
-                toolsUsed: toolsUsedNames,
-                timestamp: new Date()
-            });
-        } 
-        
-        // Normal text response
+            // ── Tool use → execute all requested tools, feed results back ──
+            if (response.type === "tool_use") {
+                const toolResults: any[] = [];
+
+                console.log(`[ChatAPI] Executing ${response.toolCalls.length} tool call(s) in round ${round + 1}`);
+
+                for (const toolCall of response.toolCalls) {
+                    const toolName = toolCall.name;
+                    const toolInput = toolCall.input;
+
+                    if (!allToolsUsed.includes(toolName)) {
+                        allToolsUsed.push(toolName);
+                    }
+
+                    const result = await executeToolFunction(toolName, toolInput, userId);
+
+                    toolResults.push({
+                        role: "tool",
+                        tool_call_id: toolCall.id,
+                        content: JSON.stringify(result)
+                    });
+                }
+
+                // Append the assistant's tool-call turn + all results to history
+                // so the next round has full context.
+                messages = [
+                    ...messages,
+                    {
+                        role: "assistant",
+                        content: null,
+                        tool_calls: response.toolCalls.map(tc => ({
+                            id: tc.id,
+                            type: "function",
+                            function: {
+                                name: tc.name,
+                                arguments: JSON.stringify(tc.input)
+                            }
+                        }))
+                    },
+                    ...toolResults
+                ];
+
+                // Continue to next round
+                continue;
+            }
+        }
+
+        // Safety: we hit MAX_TOOL_ROUNDS and the AI is still requesting tools.
+        // Ask the AI to summarise what it has done so far with the results it got.
+        console.warn(`[ChatAPI] Hit MAX_TOOL_ROUNDS (${MAX_TOOL_ROUNDS}) — requesting summary`);
+        const summaryResponse = await sendChatMessage({
+            userId,
+            messages: [
+                ...messages,
+                { role: "user", content: "Please summarise the information you found and what actions you've taken so far." }
+            ],
+            enableTools: false, // Don't allow more tools — force text answer
+            maxTokens: 4000,
+        });
+
         return successResponse({
-            response: response.content,
-            toolsUsed: [],
+            response: summaryResponse.type === "text"
+                ? summaryResponse.content
+                : "I've completed several steps. Please ask a follow-up question to continue.",
+            toolsUsed: allToolsUsed,
             timestamp: new Date()
         });
 
     } catch (error: any) {
-        console.error("[ChatAPI] Logic Panic:", error);
+        console.error("[ChatAPI] Logic error:", error);
         if (error.message === "API_KEY_MISSING") {
              return NextResponse.json({
                  success: false,
@@ -143,6 +154,13 @@ export async function POST(req: NextRequest) {
                  error: "Invalid API key",
                  message: "Your authentication failed with the AI provider. Please check your API key."
              }, { status: 400 });
+        }
+        if (error.message === "GROQ_KEY_MISSING") {
+            return NextResponse.json({
+                success: false,
+                error: "Server configuration error",
+                message: "The AI service is not configured on the server. Please contact support."
+            }, { status: 500 });
         }
         
         return errorResponse(error.message || "AI Service Unavailable", 500);

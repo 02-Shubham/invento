@@ -1,11 +1,11 @@
 import { firestoreService } from "@/lib/firestore-service";
 import OpenAI from "openai";
-import { GoogleGenerativeAI } from "@google/generative-ai";
+import Groq from "groq-sdk";
 import { UserSettings } from "@/types";
 import { AI_TOOLS } from './ai-tools-schema';
 
 interface ChatMessage {
-  role: "user" | "assistant" | "system" | "tool"; // Added 'tool' role for OpenAI
+  role: "user" | "assistant" | "system" | "tool";
   content: string | any[]; 
   tool_call_id?: string; // For tool results
   name?: string; // For tool results/calls
@@ -46,6 +46,7 @@ You have access to real business functions you can execute.
 2. Be conversational - don't just dump raw JSON data, summarize and explain what you did.
 3. Be accurate - only state facts from tool results, don't make assumptions.
 4. If you need IDs (customerId or productId) to create invoices or adjust stock, ALWAYS search for them first using search_customers/search_products unless the user explicitly gave you the ID.
+5. Format responses clearly using markdown — use **bold** for key numbers, bullet lists for multiple items, and tables for comparisons.
 
 **Current Context:**
 - Date: ${new Date().toLocaleDateString()}
@@ -57,7 +58,9 @@ export type AIResponse =
   | { type: "tool_use"; toolCalls: any[]; messageId: string };
 
 export async function sendChatMessage(options: ChatOptions): Promise<AIResponse> {
-    const { userId, messages, systemPrompt = AGENTIC_SYSTEM_PROMPT, maxTokens = 1000, enableTools = false } = options;
+    // Bug #4 fix: raised default maxTokens from 1000 → 4000 to prevent
+    // tool result truncation on complex queries (revenue reports, large inventories, etc.)
+    const { userId, messages, systemPrompt = AGENTIC_SYSTEM_PROMPT, maxTokens = 4000, enableTools = false } = options;
 
     console.log(`[AI-Client] Starting chat for user: ${userId} | Tools enabled: ${enableTools}`);
 
@@ -69,7 +72,9 @@ export async function sendChatMessage(options: ChatOptions): Promise<AIResponse>
         throw new Error("SETTINGS_NOT_FOUND");
     }
 
-    const provider = settings.aiProvider || 'openai';
+    // Map legacy 'google' provider to 'groq' for backward compatibility
+    const rawProvider = settings.aiProvider || 'groq';
+    const provider = rawProvider === 'google' ? 'groq' : rawProvider;
     
     // --- OPENAI LOGIC ---
     if (provider === 'openai') {
@@ -134,126 +139,70 @@ export async function sendChatMessage(options: ChatOptions): Promise<AIResponse>
         }
     } 
     
-    // --- GOOGLE GEMINI LOGIC ---
-    else if (provider === 'google') {
-        // Use key from ENV variable as requested
-        const apiKey = process.env.GEMINI_API_KEY;
+    // --- GROQ LOGIC ---
+    else if (provider === 'groq') {
+        const apiKey = process.env.GROQ_API_KEY;
         if (!apiKey) {
-            console.error("[AI-Client] GEMINI_API_KEY missing in environment variables");
-            throw new Error("GEMINI_KEY_MISSING");
+            console.error("[AI-Client] GROQ_API_KEY missing in environment variables");
+            throw new Error("GROQ_KEY_MISSING");
         }
 
-        const modelName = 'gemini-2.5-flash'; // Good balance for tools
+        // llama-3.3-70b-versatile has excellent tool-calling support and is very fast
+        const model = 'llama-3.3-70b-versatile';
 
         try {
-            const genAI = new GoogleGenerativeAI(apiKey);
-            // Convert tools to Gemini format
-            // Define tool definition structure for Google Generative AI
-            interface FunctionDeclaration {
-                name: string;
-                description: string;
-                parameters?: {
-                    type: string;
-                    properties: Record<string, any>;
-                    required?: string[];
-                };
-            }
+            const client = new Groq({ apiKey });
 
-            const tools = enableTools ? [{
-                functionDeclarations: AI_TOOLS.map(t => ({
-                    name: t.function.name,
-                    description: t.function.description,
-                    parameters: t.function.parameters ? {
-                        type: "OBJECT", 
-                        properties: t.function.parameters.properties,
-                        required: t.function.parameters.required
-                    } : undefined
-                }))
-            } as any] : undefined;
-
-            const model = genAI.getGenerativeModel({ 
-                model: modelName,
-                systemInstruction: systemPrompt,
-                tools: tools
-            });
-
-            // Convert history to Gemini format
-            // Gemini uses "user" and "model" roles
-            const history = messages
-                .filter(m => m.role !== 'system')
-                .map(m => {
+            // Groq uses the OpenAI-compatible format — same message & tool structure
+            const groqMessages = [
+                { role: "system", content: systemPrompt },
+                ...messages.filter(m => m.role !== 'system').map(m => {
                     if (m.role === 'tool') {
-                         // Tool response handling in Gemini history is complex (FunctionResponse part)
-                         // For single-turn implementation or simple re-feeding, we need proper parts structure
-                         // Assuming 'content' is the JSON result
-                         return {
-                             role: 'function',
-                             parts: [{
-                                 functionResponse: {
-                                    name: m.name || 'unknown_tool', // We need tool name here!!
-                                    response: { name: m.name, content: m.content } // wrap content
-                                 }
-                             }]
-                         };
+                        return {
+                            role: 'tool' as const,
+                            tool_call_id: m.tool_call_id!,
+                            content: m.content as string
+                        };
                     }
-                    if (m.role === 'assistant') {
-                        // Check if it was a tool call
-                         if ((m as any).tool_calls) {
-                             return {
-                                 role: 'model',
-                                 parts: (m as any).tool_calls.map((tc: any) => ({
-                                     functionCall: {
-                                         name: tc.function.name,
-                                         args: JSON.parse(tc.function.arguments)
-                                     }
-                                 }))
-                             };
-                         }
-                         return { role: 'model', parts: [{ text: m.content as string }] };
-                    }
-                    return { role: 'user', parts: [{ text: m.content as string }] };
-                });
+                    return {
+                        role: m.role as any,
+                        content: m.content,
+                        tool_calls: (m as any).tool_calls
+                    };
+                })
+            ] as any;
 
-            // Filter out 'function' roles if they don't have matching 'model' calls in history? 
-            // Gemini requires strict User -> Model -> Function -> Model sequence.
-            // Simplified: Just use the generateContent for the LAST user message, passing rest as history?
-            // Actually, chatSession is better for multi-turn.
-            
-            // Let's assume standard chat session usage:
-            const chat = model.startChat({
-                history: history.slice(0, -1) as any // Everything except last message
+            console.log(`[AI-Client] Sending to Groq (${model})...`);
+            const response = await client.chat.completions.create({
+                model,
+                messages: groqMessages,
+                max_tokens: maxTokens,
+                tools: enableTools ? AI_TOOLS as any : undefined,
+                tool_choice: enableTools ? "auto" : "none"
             });
 
-            const lastMsg = messages[messages.length - 1]; // Should be user message
-            console.log(`[AI-Client] Sending to Gemini (${modelName})...`);
-            
-            const result = await chat.sendMessage(lastMsg.content as string);
-            const response = result.response;
-            const text = response.text();
-            
-            // Check for function calls
-             const toolCalls = response.functionCalls();
-             if (toolCalls && toolCalls.length > 0) {
-                 return {
-                     type: "tool_use",
-                     toolCalls: toolCalls.map((tc) => ({
-                         id: 'call_' + Math.random().toString(36).substr(2, 9), // Gemini doesn't always provide ID, generic one
-                         name: tc.name,
-                         input: tc.args,
-                         type: 'function'
-                     })),
-                     messageId: 'gemini_' + Date.now()
-                 };
-             }
+            const choice = response.choices[0];
+            const message = choice.message;
 
-             return {
-                 type: "text",
-                 content: text
-             };
-
+            if (message.tool_calls && message.tool_calls.length > 0) {
+                return {
+                    type: "tool_use",
+                    toolCalls: message.tool_calls.map((tc: any) => ({
+                        id: tc.id,
+                        name: tc.function.name,
+                        input: JSON.parse(tc.function.arguments),
+                        type: 'function'
+                    })),
+                    messageId: response.id
+                };
+            } else {
+                return { type: "text", content: message.content || "" };
+            }
         } catch (error: any) {
-             console.error("[AI-Client] Gemini Error:", error);
-             throw new Error(error.message || "Gemini Service Failed");
+            console.error("[AI-Client] Groq Error:", error);
+            if (error.status === 401) throw new Error("INVALID_API_KEY");
+            if (error.status === 429) throw new Error("RATE_LIMIT");
+            throw new Error(error.message || "Groq Service Failed");
         }
     }
 

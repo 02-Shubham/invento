@@ -18,7 +18,7 @@ export default function ApiKeysPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [apiKey, setApiKey] = useState("");
-  const [provider, setProvider] = useState<"openai" | "google">("openai");
+  const [provider, setProvider] = useState<"openai" | "groq">("groq");
   const [isKeySet, setIsKeySet] = useState(false);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
 
@@ -29,7 +29,7 @@ export default function ApiKeysPage() {
         setLoading(true);
         const settings = await firestoreService.getUserSettings(user.uid) as UserSettings;
         if (settings) {
-          if (settings.aiProvider) setProvider(settings.aiProvider);
+          if (settings.aiProvider) setProvider(settings.aiProvider === 'google' ? 'groq' : settings.aiProvider as 'openai' | 'groq');
           if (settings.aiApiKeySet) setIsKeySet(true);
           if (settings.aiKeyLastUpdated) {
             // Handle Timestamp conversion if coming from firestore raw
@@ -76,20 +76,15 @@ export default function ApiKeysPage() {
         aiProvider: provider,
         aiKeyLastUpdated: new Date(),
         // Default models
-        aiModel: provider === 'openai' ? 'gpt-4-turbo' : 'gemini-2.5-flash'
+        aiModel: provider === 'openai' ? 'gpt-4-turbo' : 'llama-3.3-70b-versatile'
       };
 
       // Only update API key if provided (or if switching to OpenAI and providing one)
       if (provider === 'openai' && cleanApiKey) {
           updateData.aiApiKey = cleanApiKey;
           updateData.aiApiKeySet = true;
-      } else if (provider === 'google') {
-          // For Google, we are relying on ENV vars, so we don't save a user API key?
-          // Or does the user WANT to provide one? The prompt says "keep the gemini api in env".
-          // So we don't save a key for the user here. We just set the provider.
-          // However, existing implementations check 'aiApiKey' in settings.
-          // We need custom logic in backend to check env if provider is Google.
-          // For consistency, we'll just save the Provider selection.
+      } else if (provider === 'groq') {
+          // Groq uses GROQ_API_KEY from env — no user key needed
       }
 
       await firestoreService.updateUserSettings(user.uid, updateData);
@@ -130,7 +125,7 @@ export default function ApiKeysPage() {
         </CardHeader>
         <CardContent className="space-y-6">
             
-            <RadioGroup value={provider} onValueChange={(v: "openai" | "google") => setProvider(v)} className="grid grid-cols-2 gap-4">
+            <RadioGroup value={provider} onValueChange={(v: "openai" | "groq") => setProvider(v)} className="grid grid-cols-2 gap-4">
                 <div>
                     <RadioGroupItem value="openai" id="openai" className="peer sr-only" />
                     <Label
@@ -142,13 +137,13 @@ export default function ApiKeysPage() {
                     </Label>
                 </div>
                 <div>
-                    <RadioGroupItem value="google" id="google" className="peer sr-only" />
+                    <RadioGroupItem value="groq" id="groq" className="peer sr-only" />
                     <Label
-                        htmlFor="google"
+                        htmlFor="groq"
                         className="flex flex-col items-center justify-between rounded-md border-2 border-muted bg-popover p-4 hover:bg-accent hover:text-accent-foreground peer-data-[state=checked]:border-primary [&:has([data-state=checked])]:border-primary cursor-pointer"
                     >
-                        <span className="mb-2 text-lg font-semibold">Google Gemini</span>
-                        <span className="text-xs text-center text-neutral-500">Gemini 2.5 Flash</span>
+                        <span className="mb-2 text-lg font-semibold">Groq</span>
+                        <span className="text-xs text-center text-neutral-500">Llama 3.3 · 70B</span>
                     </Label>
                 </div>
             </RadioGroup>
@@ -188,14 +183,14 @@ export default function ApiKeysPage() {
                     </div>
                 ) : (
                     <div className="bg-neutral-50 p-4 rounded-lg flex items-start gap-3 animate-in fade-in slide-in-from-top-2">
-                        <div className="mt-0.5 bg-blue-100 p-1 rounded text-blue-600">
+                        <div className="mt-0.5 bg-orange-100 p-1 rounded text-orange-600">
                              <Key className="h-4 w-4" />
                         </div>
                         <div>
                             <h4 className="text-sm font-medium text-neutral-900">Managed API Key</h4>
                             <p className="text-xs text-neutral-500 mt-1">
-                                The Gemini API key is configured safely using environment variables (<code>GEMINI_API_KEY</code>). 
-                                You do not need to enter it here.
+                                The Groq API key is configured safely using environment variables (<code>GROQ_API_KEY</code>).
+                                You do not need to enter it here. Using <strong>Llama 3.3 70B</strong> — ultra-fast inference.
                             </p>
                         </div>
                     </div>
@@ -218,7 +213,7 @@ export default function ApiKeysPage() {
           <AlertDescription className="ml-2 text-xs text-neutral-500">
               {provider === 'openai' 
                 ? "You are responsible for API usage costs directly with OpenAI." 
-                : "Google Gemini usage depends on the configured environment key quota."}
+                : "Groq provides extremely fast inference. The API key is managed by the app."}
           </AlertDescription>
       </Alert>
     </div>
