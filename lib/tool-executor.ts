@@ -52,6 +52,10 @@ export async function executeToolFunction(
       case "get_low_stock_products":
         result = await executeGetLowStockProducts(toolInput, userId);
         break;
+
+      case "add_product":
+        result = await executeAddProduct(toolInput, userId);
+        break;
       
       default:
         result = {
@@ -490,5 +494,56 @@ async function executeGetLowStockProducts(
     };
   } catch (error: any) {
     return { success: false, error: error.message || "Failed to retrieve low stock products" };
+  }
+}
+
+async function executeAddProduct(
+  input: { name: string; price: number; stockQuantity?: number; sku?: string; category?: string; description?: string },
+  userId: string
+): Promise<ToolResult> {
+  try {
+    const { name, price, stockQuantity = 0, sku, category = "General", description = "" } = input;
+    if (!name || price === undefined) {
+      return { success: false, error: "Product name and price are required." };
+    }
+
+    // Auto-generate SKU if not provided
+    let finalSku = sku;
+    if (!finalSku) {
+      const prefix = name.slice(0, 3).toUpperCase().replace(/[^A-Z]/g, "PRD");
+      const randomPart = Math.floor(100 + Math.random() * 900);
+      finalSku = `${prefix}-${randomPart}`;
+    }
+
+    const newProductData = {
+      name,
+      description,
+      sku: finalSku,
+      price: Number(price),
+      stockQuantity: Number(stockQuantity),
+      category,
+      canBePurchased: true,
+      canBeProduced: false,
+      averageCost: Number(price) * 0.7, // Assume a 70% COGS as fallback
+      lastCost: Number(price) * 0.7,
+      totalValue: Number(stockQuantity) * (Number(price) * 0.7),
+    };
+
+    const productId = await firestoreService.addProduct(newProductData, userId);
+
+    return {
+      success: true,
+      data: {
+        productId,
+        name,
+        sku: finalSku,
+        price: Number(price),
+        stockQuantity: Number(stockQuantity),
+        category,
+        description
+      }
+    };
+  } catch (error: any) {
+    return { success: false, error: error.message || "Failed to add product" };
   }
 }

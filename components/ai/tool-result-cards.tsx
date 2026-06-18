@@ -354,3 +354,76 @@ export function PendingPaymentsCard({ data }: PendingPaymentsCardProps) {
     </div>
   );
 }
+
+// ── Product Created Card ──────────────────────────────────────────────────────
+interface ProductCreatedCardProps {
+  data: {
+    productId: string;
+    name: string;
+    sku: string;
+    price: number;
+    stockQuantity: number;
+    category: string;
+    description?: string;
+  };
+}
+
+export function ProductCreatedCard({ data }: ProductCreatedCardProps) {
+  if (!data) return null;
+
+  return (
+    <div className="my-3 overflow-hidden rounded-xl border border-neutral-200 border-l-4 border-l-violet-500 bg-white shadow-sm transition-all hover:shadow-md">
+      <div className="p-4">
+        {/* Header */}
+        <div className="flex items-start justify-between">
+          <div className="space-y-1">
+            <span className="text-[10px] font-semibold uppercase tracking-wider text-violet-600 bg-violet-50 px-2 py-0.5 rounded-full">
+              Product Added
+            </span>
+            <h4 className="text-sm font-semibold text-neutral-900 mt-1">
+              {data.name}
+            </h4>
+          </div>
+          <Badge variant="outline" className="font-mono text-xs text-neutral-700 bg-neutral-50">
+            {data.sku}
+          </Badge>
+        </div>
+
+        {/* Product Details Grid */}
+        <div className="mt-4 grid grid-cols-3 gap-2 border-t border-b border-neutral-100 py-3 text-xs">
+          <div>
+            <span className="text-neutral-400 block mb-0.5">Price</span>
+            <span className="font-bold text-neutral-900">{formatCurrency(data.price)}</span>
+          </div>
+          <div>
+            <span className="text-neutral-400 block mb-0.5">Category</span>
+            <span className="font-medium text-neutral-800 truncate block max-w-[80px]">
+              {data.category}
+            </span>
+          </div>
+          <div>
+            <span className="text-neutral-400 block mb-0.5">Starting Stock</span>
+            <span className="font-medium text-neutral-855 font-mono">{data.stockQuantity} units</span>
+          </div>
+        </div>
+
+        {/* Description if present */}
+        {data.description && (
+          <p className="mt-3 text-xs text-neutral-500 line-clamp-2 italic">
+            "{data.description}"
+          </p>
+        )}
+
+        {/* Footer actions */}
+        <div className="mt-3.5 flex items-center justify-end">
+          <Button asChild size="sm" variant="outline" className="h-8 text-xs font-medium border-neutral-300 hover:border-black hover:bg-neutral-50 transition-colors">
+            <Link href="/inventory" className="flex items-center gap-1">
+              View Inventory
+              <ArrowRight className="h-3 w-3" />
+            </Link>
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+}

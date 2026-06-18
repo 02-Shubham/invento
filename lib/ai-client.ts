@@ -48,6 +48,10 @@ You have access to real business functions you can execute.
 4. If you need IDs (customerId or productId) to create invoices or adjust stock, ALWAYS search for them first using search_customers/search_products unless the user explicitly gave you the ID.
 5. Format responses clearly using markdown — use **bold** for key numbers, bullet lists for multiple items, and tables for comparisons.
 
+**Important Protocol:**
+- Do NOT wrap tool calls in text tags like <function>...</function> or write function calls in your conversational response.
+- Let the API handle the structured tool calls.
+
 **Current Context:**
 - Date: ${new Date().toLocaleDateString()}
 
@@ -151,6 +155,36 @@ export async function sendChatMessage(options: ChatOptions): Promise<AIResponse>
     } catch (error: any) {
       if (error.status === 401) throw new Error("INVALID_API_KEY");
       if (error.status === 429) throw new Error("RATE_LIMIT");
+
+      // Intercept and parse Groq's failed_generation when it emits XML tool calls instead of standard tool calls
+      if (error.status === 400) {
+        const rawError = error.error || error;
+        const failedGen = rawError?.failed_generation || rawError?.error?.failed_generation;
+        if (failedGen) {
+          const match = failedGen.match(/<function=(\w+)=([\s\S]*?)<\/function>/);
+          if (match) {
+            const toolName = match[1];
+            const argsStr = match[2];
+            try {
+              const parsedArgs = JSON.parse(argsStr);
+              console.log(`[AI-Client] Intercepted and parsed tool call from failed_generation: ${toolName}`, parsedArgs);
+              return {
+                type: "tool_use",
+                toolCalls: [{
+                  id: `call_${Math.random().toString(36).substring(2, 9)}`,
+                  name: toolName,
+                  input: parsedArgs,
+                  type: 'function'
+                }],
+                messageId: `msg_${Math.random().toString(36).substring(2, 9)}`
+              };
+            } catch (jsonErr) {
+              console.warn("[AI-Client] Failed to parse failed_generation JSON:", jsonErr);
+            }
+          }
+        }
+      }
+
       throw new Error(error.message || "Groq Service Failed");
     }
   }

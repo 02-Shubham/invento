@@ -175,6 +175,45 @@ export const AI_TOOLS: ToolDefinition[] = [
         required: []
       }
     }
+  },
+  {
+    type: "function",
+    function: {
+      name: "add_product",
+      description: "Add a new product to the inventory. Requires name and price. If the user hasn't provided the price, ask them for the price before calling this tool.",
+      parameters: {
+        type: "object",
+        properties: {
+          name: {
+            type: "string",
+            description: "The name of the new product. Example: 'Shubham's bag'"
+          },
+          price: {
+            type: "number",
+            description: "The unit price of the product. This is REQUIRED. If missing in the user request, ask the user."
+          },
+          stockQuantity: {
+            type: "number",
+            description: "Initial stock quantity. Defaults to 0 if not specified.",
+            default: 0
+          },
+          sku: {
+            type: "string",
+            description: "Stock Keeping Unit identifier. If not provided, one will be auto-generated."
+          },
+          category: {
+            type: "string",
+            description: "Category of the product. Defaults to 'General'.",
+            default: "General"
+          },
+          description: {
+            type: "string",
+            description: "Optional description of the product."
+          }
+        },
+        required: ["name", "price"]
+      }
+    }
   }
 ];
 

@@ -20,7 +20,8 @@ import {
   InvoiceCreatedCard,
   LowStockCard,
   RevenueReportCard,
-  PendingPaymentsCard
+  PendingPaymentsCard,
+  ProductCreatedCard
 } from "@/components/ai/tool-result-cards";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -582,6 +583,9 @@ export default function AIChatWidget({ isOpen, onClose }: AIChatWidgetProps) {
                             )}
                             {msg.toolResultsData["get_customers_with_pending_payments"] && (
                               <PendingPaymentsCard data={msg.toolResultsData["get_customers_with_pending_payments"]} />
+                            )}
+                            {msg.toolResultsData["add_product"] && (
+                              <ProductCreatedCard data={msg.toolResultsData["add_product"]} />
                             )}
                           </div>
                         )}
