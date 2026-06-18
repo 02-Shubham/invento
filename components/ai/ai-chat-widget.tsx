@@ -16,6 +16,12 @@ import { Badge } from "@/components/ui/badge";
 import { useVoice } from "@/lib/voice-context";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+import {
+  InvoiceCreatedCard,
+  LowStockCard,
+  RevenueReportCard,
+  PendingPaymentsCard
+} from "@/components/ai/tool-result-cards";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -26,6 +32,7 @@ interface Message {
   timestamp: Date;
   toolsUsed?: string[];
   isStreaming?: boolean; // true while tokens are arriving
+  toolResultsData?: Record<string, any>;
 }
 
 interface SavedConversation {
@@ -145,6 +152,7 @@ export default function AIChatWidget({ isOpen, onClose }: AIChatWidgetProps) {
             id: m.id, role: m.role, content: m.content,
             timestamp: m.timestamp.toISOString(),
             toolsUsed: m.toolsUsed ?? [],
+            toolResultsData: m.toolResultsData ?? null,
           })),
         });
       } catch (err) {
@@ -214,6 +222,7 @@ export default function AIChatWidget({ isOpen, onClose }: AIChatWidgetProps) {
           ...m,
           timestamp: new Date(m.timestamp),
           isStreaming: false,
+          toolResultsData: m.toolResultsData ?? undefined,
         }))
       );
       setConversationId(conv.id);
@@ -351,11 +360,12 @@ export default function AIChatWidget({ isOpen, onClose }: AIChatWidgetProps) {
 
           if (event.done) {
             finalToolsUsed = event.toolsUsed ?? [];
+            const finalToolResults = event.toolResults ?? {};
             // Finalise: mark as no longer streaming
             setMessages(prev =>
               prev.map(m =>
                 m.id === streamingMsgId
-                  ? { ...m, content: fullContent, isStreaming: false, toolsUsed: finalToolsUsed }
+                  ? { ...m, content: fullContent, isStreaming: false, toolsUsed: finalToolsUsed, toolResultsData: finalToolResults }
                   : m
               )
             );
@@ -452,23 +462,28 @@ export default function AIChatWidget({ isOpen, onClose }: AIChatWidgetProps) {
                   <p className="text-xs text-neutral-400 text-center py-4 px-3">No saved conversations yet.</p>
                 ) : (
                   <ul className="max-h-52 overflow-y-auto">
-                    {recentChats.map(chat => (
-                      <li key={chat.id}>
-                        <button
-                          className="w-full flex items-center justify-between px-3 py-2.5 hover:bg-neutral-50 text-left transition-colors group"
-                          onClick={() => loadConversation(chat.id)}
-                        >
-                          <div className="flex items-start gap-2 min-w-0">
-                            <Clock className="h-3 w-3 text-neutral-400 mt-0.5 shrink-0" />
-                            <div className="min-w-0">
-                              <p className="text-xs font-medium text-neutral-800 truncate">{chat.title}</p>
-                              <p className="text-[10px] text-neutral-400">{formatRelativeTime(chat.updatedAt)}</p>
+                    {recentChats.map(chat => {
+                      const isActive = chat.id === conversationId;
+                      return (
+                        <li key={chat.id}>
+                          <button
+                            className={`w-full flex items-center justify-between px-3 py-2.5 hover:bg-neutral-50 text-left transition-colors group ${
+                              isActive ? "bg-neutral-100 font-semibold border-l-2 border-black" : ""
+                            }`}
+                            onClick={() => loadConversation(chat.id)}
+                          >
+                            <div className="flex items-start gap-2 min-w-0">
+                              <Clock className="h-3 w-3 text-neutral-400 mt-0.5 shrink-0" />
+                              <div className="min-w-0">
+                                <p className="text-xs font-medium text-neutral-800 truncate">{chat.title}</p>
+                                <p className="text-[10px] text-neutral-400">{formatRelativeTime(chat.updatedAt)}</p>
+                              </div>
                             </div>
-                          </div>
-                          <ChevronRight className="h-3 w-3 text-neutral-300 group-hover:text-neutral-500 shrink-0" />
-                        </button>
-                      </li>
-                    ))}
+                            <ChevronRight className="h-3 w-3 text-neutral-300 group-hover:text-neutral-500 shrink-0" />
+                          </button>
+                        </li>
+                      );
+                    })}
                   </ul>
                 )}
               </div>
@@ -542,17 +557,35 @@ export default function AIChatWidget({ isOpen, onClose }: AIChatWidgetProps) {
                       </div>
                     ) : (
                       // AI messages: full markdown rendering
-                      <div className="p-3 rounded-2xl rounded-tl-sm text-sm bg-neutral-100 text-neutral-800">
-                        {msg.content ? (
-                          <ReactMarkdown
-                            remarkPlugins={[remarkGfm]}
-                            components={mdComponents as any}
-                          >
-                            {msg.content}
-                          </ReactMarkdown>
-                        ) : null}
+                      <>
+                        <div className="p-3 rounded-2xl rounded-tl-sm text-sm bg-neutral-100 text-neutral-800">
+                          {msg.content ? (
+                            <ReactMarkdown
+                              remarkPlugins={[remarkGfm]}
+                              components={mdComponents as any}
+                            >
+                              {msg.content}
+                            </ReactMarkdown>
+                          ) : null}
+                        </div>
 
-                      </div>
+                        {!msg.isStreaming && msg.toolResultsData && (
+                          <div className="mt-2 space-y-2">
+                            {msg.toolResultsData["create_invoice"] && (
+                              <InvoiceCreatedCard data={msg.toolResultsData["create_invoice"]} />
+                            )}
+                            {msg.toolResultsData["get_low_stock_products"] && (
+                              <LowStockCard data={msg.toolResultsData["get_low_stock_products"]} />
+                            )}
+                            {msg.toolResultsData["get_revenue_report"] && (
+                              <RevenueReportCard data={msg.toolResultsData["get_revenue_report"]} />
+                            )}
+                            {msg.toolResultsData["get_customers_with_pending_payments"] && (
+                              <PendingPaymentsCard data={msg.toolResultsData["get_customers_with_pending_payments"]} />
+                            )}
+                          </div>
+                        )}
+                      </>
                     )}
 
                     {/* Tool usage badges */}

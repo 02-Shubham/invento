@@ -38,6 +38,7 @@ function sseEvent(payload: Record<string, unknown>): Uint8Array {
 async function fakeStream(
   text: string,
   toolsUsed: string[],
+  toolResults: Record<string, any>,
   controller: ReadableStreamDefaultController
 ) {
   // Split on whitespace boundaries, keeping the separators so spacing is preserved
@@ -48,7 +49,7 @@ async function fakeStream(
     // ~20 ms between tokens ≈ smooth 50-word/sec reading pace
     await new Promise(r => setTimeout(r, 20));
   }
-  controller.enqueue(sseEvent({ done: true, toolsUsed }));
+  controller.enqueue(sseEvent({ done: true, toolsUsed, toolResults }));
   controller.close();
 }
 
@@ -57,13 +58,14 @@ async function trueStream(
   userId: string,
   messages: any[],
   toolsUsed: string[],
+  toolResults: Record<string, any>,
   controller: ReadableStreamDefaultController
 ) {
   try {
     for await (const token of sendChatMessageStream({ userId, messages, enableTools: false, maxTokens: 4000 })) {
       controller.enqueue(sseEvent({ token }));
     }
-    controller.enqueue(sseEvent({ done: true, toolsUsed }));
+    controller.enqueue(sseEvent({ done: true, toolsUsed, toolResults }));
   } catch (err: any) {
     controller.enqueue(sseEvent({ error: err.message || "Streaming failed" }));
   } finally {
@@ -98,6 +100,7 @@ export async function POST(req: NextRequest) {
   let messages: any[] = [...history, { role: "user", content: message }];
 
   const allToolsUsed: string[] = [];
+  const allToolResults: Record<string, any> = {};
   // Track whether any tool call happened across all rounds
   let toolCallsHappened = false;
   // If AI responded with direct text on round 1 (no tools), store it here
@@ -130,6 +133,9 @@ export async function POST(req: NextRequest) {
         for (const toolCall of response.toolCalls) {
           if (!allToolsUsed.includes(toolCall.name)) allToolsUsed.push(toolCall.name);
           const result = await executeToolFunction(toolCall.name, toolCall.input, userId);
+          if (result.success && result.data) {
+            allToolResults[toolCall.name] = result.data;
+          }
           toolResults.push({ role: "tool", tool_call_id: toolCall.id, content: JSON.stringify(result) });
         }
 
@@ -160,7 +166,7 @@ export async function POST(req: NextRequest) {
       // Case A — fake-stream simple text response
       const stream = new ReadableStream({
         async start(controller) {
-          await fakeStream(directText!, [], controller);
+          await fakeStream(directText!, [], {}, controller);
         }
       });
       return new Response(stream, { headers: SSE_HEADERS });
@@ -170,7 +176,7 @@ export async function POST(req: NextRequest) {
       // Case B — true streaming synthesis after tools resolved
       const stream = new ReadableStream({
         async start(controller) {
-          await trueStream(userId, messages, allToolsUsed, controller);
+          await trueStream(userId, messages, allToolsUsed, allToolResults, controller);
         }
       });
       return new Response(stream, { headers: SSE_HEADERS });
@@ -190,7 +196,7 @@ export async function POST(req: NextRequest) {
 
     const stream = new ReadableStream({
       async start(controller) {
-        await fakeStream(summaryText, allToolsUsed, controller);
+        await fakeStream(summaryText, allToolsUsed, allToolResults, controller);
       }
     });
     return new Response(stream, { headers: SSE_HEADERS });
