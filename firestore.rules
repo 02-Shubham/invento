@@ -66,9 +66,17 @@ service cloud.firestore {
       allow update, delete: if isAuthenticated() && resource.data.userId == request.auth.uid;
     }
     
+    // Conversations (AI Chat History) - users can only access their own conversations
+    match /conversations/{conversationId} {
+      allow read: if isAuthenticated() && resource.data.userId == request.auth.uid;
+      allow create: if isAuthenticated() && request.resource.data.userId == request.auth.uid;
+      allow update, delete: if isAuthenticated() && resource.data.userId == request.auth.uid;
+    }
+    
     // Default deny all other collections
     match /{document=**} {
       allow read, write: if false;
     }
+
   }
 }
