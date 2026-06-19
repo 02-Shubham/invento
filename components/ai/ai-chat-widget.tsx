@@ -1,6 +1,8 @@
 "use client";
 
-import { useState, useRef, useEffect, useCallback } from "react";
+import { useState, useRef, useEffect, useCallback, forwardRef, useImperativeHandle } from "react";
+import AgentSteps, { AgentStep } from "./agent-steps";
+import { getFollowUpSuggestions } from "@/lib/follow-up-suggestions";
 import { useAuth } from "@/lib/auth-context";
 import { firestoreService } from "@/lib/firestore-service";
 import { Button } from "@/components/ui/button";
@@ -111,7 +113,8 @@ const mdComponents = {
 
 // ── Main Component ────────────────────────────────────────────────────────────
 
-export default function AIChatWidget({ isOpen, onClose }: AIChatWidgetProps) {
+const AIChatWidget = forwardRef<{ sendExternalMessage: (text: string) => void }, AIChatWidgetProps>(
+  function AIChatWidget({ isOpen, onClose }, ref) {
   const { user } = useAuth();
   const {
     isRecording, isProcessing: isVoiceProcessing,
@@ -123,6 +126,13 @@ export default function AIChatWidget({ isOpen, onClose }: AIChatWidgetProps) {
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<{ message: string; type?: string } | null>(null);
+  const [liveSteps, setLiveSteps] = useState<AgentStep[]>([]);
+
+  useImperativeHandle(ref, () => ({
+    sendExternalMessage(text: string) {
+      sendMessage(text);
+    }
+  }));
 
   // ── Conversation persistence ──────────────────────────────────────────────
   const [conversationId, setConversationId] = useState<string | null>(null);
@@ -292,6 +302,7 @@ export default function AIChatWidget({ isOpen, onClose }: AIChatWidgetProps) {
   const sendMessage = useCallback(async (overrideText?: string) => {
     const text = (overrideText ?? input).trim();
     if (!text || loading) return;
+    setLiveSteps([]);
 
     const userMessage: Message = { id: generateId(), role: "user", content: text, timestamp: new Date() };
     const streamingMsgId = generateId();
@@ -372,6 +383,19 @@ export default function AIChatWidget({ isOpen, onClose }: AIChatWidgetProps) {
             );
           }
 
+          if (event.step) {
+            setLiveSteps(prev => {
+              const idx = prev.findIndex(s => s.tool === event.step.tool);
+              if (idx !== -1) {
+                const updated = [...prev];
+                updated[idx] = { ...updated[idx], ...event.step };
+                return updated;
+              } else {
+                return [...prev, event.step];
+              }
+            });
+          }
+
           if (event.error) {
             throw new Error(event.error);
           }
@@ -407,6 +431,9 @@ export default function AIChatWidget({ isOpen, onClose }: AIChatWidgetProps) {
   ];
 
   // ── Render ────────────────────────────────────────────────────────────────
+
+  const lastAssistantMsgIndex = [...messages].reverse().findIndex(m => m.role === "assistant");
+  const lastAssistantMsgId = lastAssistantMsgIndex !== -1 ? messages[messages.length - 1 - lastAssistantMsgIndex].id : null;
 
   return (
     <>
@@ -589,6 +616,25 @@ export default function AIChatWidget({ isOpen, onClose }: AIChatWidgetProps) {
                             )}
                           </div>
                         )}
+
+                        {/* P2.2 Suggested Follow-up Prompts */}
+                        {!msg.isStreaming && !loading && msg.id === lastAssistantMsgId && (
+                          <div className="mt-3 flex flex-wrap gap-1.5 animate-in fade-in slide-in-from-bottom-1 duration-200">
+                            {getFollowUpSuggestions(msg.toolsUsed ?? []).map((suggestion, idx) => (
+                              <Button
+                                key={idx}
+                                variant="outline"
+                                size="sm"
+                                onClick={() => {
+                                  sendMessage(suggestion);
+                                }}
+                                className="text-[10px] h-7 px-3 rounded-full border-neutral-200 hover:border-black/50 hover:bg-neutral-50 text-neutral-600 hover:text-black transition-all"
+                              >
+                                {suggestion}
+                              </Button>
+                            ))}
+                          </div>
+                        )}
                       </>
                     )}
 
@@ -611,6 +657,16 @@ export default function AIChatWidget({ isOpen, onClose }: AIChatWidgetProps) {
                 </div>
               </div>
             ))}
+
+            {/* Live Agent Steps */}
+            {loading && liveSteps.length > 0 && (
+              <div className="flex justify-start">
+                <div className="flex items-start gap-2">
+                  <div className="w-8 shrink-0" />
+                  <AgentSteps steps={liveSteps} />
+                </div>
+              </div>
+            )}
 
             {/* Typing indicator — only shown before first streaming token arrives */}
             {loading && messages[messages.length - 1]?.isStreaming && messages[messages.length - 1]?.content === "" && (
@@ -698,4 +754,6 @@ export default function AIChatWidget({ isOpen, onClose }: AIChatWidgetProps) {
       </div>
     </>
   );
-}
+});
+
+export default AIChatWidget;

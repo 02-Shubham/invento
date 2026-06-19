@@ -73,6 +73,33 @@ async function trueStream(
   }
 }
 
+function getToolSummary(toolName: string, result: any): string {
+  if (!result || !result.success) return "Failed";
+  const data = result.data;
+  if (!data) return "Done";
+  
+  switch (toolName) {
+    case "search_products":
+      return `Found ${data.count || data.products?.length || 0} products`;
+    case "search_customers":
+      return `Found ${data.count || data.customers?.length || 0} customers`;
+    case "get_customers_with_pending_payments":
+      return `Found ${data.count || data.customers?.length || 0} outstanding accounts`;
+    case "create_invoice":
+      return `Created ${data.invoiceNumber} (${data.itemsCount} items, Total: $${data.totalAmount})`;
+    case "adjust_stock":
+      return `Adjusted stock by ${data.quantityAdjusted} (New stock: ${data.newStockLevel})`;
+    case "get_revenue_report":
+      return `Loaded report: ${data.period}`;
+    case "get_low_stock_products":
+      return `Found ${data.count || data.products?.length || 0} low stock items`;
+    case "add_product":
+      return `Added product ${data.name} (${data.sku})`;
+    default:
+      return "Completed";
+  }
+}
+
 export async function POST(req: NextRequest) {
   // ── Auth ─────────────────────────────────────────────────────────────────
   const userId = await getCurrentUser(req);
@@ -101,123 +128,102 @@ export async function POST(req: NextRequest) {
 
   const allToolsUsed: string[] = [];
   const allToolResults: Record<string, any> = {};
-  // Track whether any tool call happened across all rounds
-  let toolCallsHappened = false;
-  // If AI responded with direct text on round 1 (no tools), store it here
-  let directText: string | null = null;
 
-  // ── Agentic tool loop (non-streaming) ────────────────────────────────────
-  try {
-    for (let round = 0; round < MAX_TOOL_ROUNDS; round++) {
-      console.log(`[ChatAPI] Round ${round + 1}/${MAX_TOOL_ROUNDS}`);
+  const stream = new ReadableStream({
+    async start(controller) {
+      try {
+        let currentMessages = [...messages];
+        let loopDirectText: string | null = null;
+        let loopToolCallsHappened = false;
 
-      const response = await sendChatMessage({ userId, messages, enableTools: true, maxTokens: 4000 });
+        // ── Agentic tool loop (non-streaming internally, streamed to client) ────
+        for (let round = 0; round < MAX_TOOL_ROUNDS; round++) {
+          console.log(`[ChatAPI] Round ${round + 1}/${MAX_TOOL_ROUNDS}`);
 
-      console.log(`[ChatAPI] Round ${round + 1} type: ${response.type}`);
+          const response = await sendChatMessage({ userId, messages: currentMessages, enableTools: true, maxTokens: 4000 });
 
-      if (response.type === "text") {
-        if (!toolCallsHappened) {
-          // Simple query — AI answered directly without any tools
-          directText = response.content;
-        }
-        // Either way, loop is done — we'll stream below
-        break;
-      }
+          console.log(`[ChatAPI] Round ${round + 1} type: ${response.type}`);
 
-      if (response.type === "tool_use") {
-        toolCallsHappened = true;
-        const toolResults: any[] = [];
-
-        console.log(`[ChatAPI] Executing ${response.toolCalls.length} tool(s)`);
-
-        for (const toolCall of response.toolCalls) {
-          if (!allToolsUsed.includes(toolCall.name)) allToolsUsed.push(toolCall.name);
-          const result = await executeToolFunction(toolCall.name, toolCall.input, userId);
-          if (result.success && result.data) {
-            allToolResults[toolCall.name] = result.data;
+          if (response.type === "text") {
+            if (!loopToolCallsHappened) {
+              loopDirectText = response.content;
+            }
+            break;
           }
-          toolResults.push({ role: "tool", tool_call_id: toolCall.id, content: JSON.stringify(result) });
+
+          if (response.type === "tool_use") {
+            loopToolCallsHappened = true;
+            const toolResults: any[] = [];
+
+            console.log(`[ChatAPI] Executing ${response.toolCalls.length} tool(s)`);
+
+            for (const toolCall of response.toolCalls) {
+              if (!allToolsUsed.includes(toolCall.name)) allToolsUsed.push(toolCall.name);
+              
+              // Enqueue "running" status update
+              controller.enqueue(sseEvent({ step: { tool: toolCall.name, status: "running" } }));
+
+              const result = await executeToolFunction(toolCall.name, toolCall.input, userId);
+              
+              if (result.success && result.data) {
+                allToolResults[toolCall.name] = result.data;
+              }
+
+              // Enqueue "done" status update with brief summary
+              const summary = getToolSummary(toolCall.name, result);
+              controller.enqueue(sseEvent({ step: { tool: toolCall.name, status: "done", summary } }));
+
+              toolResults.push({ role: "tool", tool_call_id: toolCall.id, content: JSON.stringify(result) });
+            }
+
+            currentMessages = [
+              ...currentMessages,
+              {
+                role: "assistant",
+                content: null,
+                tool_calls: response.toolCalls.map(tc => ({
+                  id: tc.id, type: "function",
+                  function: { name: tc.name, arguments: JSON.stringify(tc.input) }
+                }))
+              },
+              ...toolResults
+            ];
+
+            continue;
+          }
         }
 
-        messages = [
-          ...messages,
-          {
-            role: "assistant",
-            content: null,
-            tool_calls: response.toolCalls.map(tc => ({
-              id: tc.id, type: "function",
-              function: { name: tc.name, arguments: JSON.stringify(tc.input) }
-            }))
-          },
-          ...toolResults
-        ];
-
-        continue;
-      }
-    }
-
-    // ── Streaming response ────────────────────────────────────────────────
-    //
-    // Case A: AI answered directly (no tools) → fake-stream the stored text
-    // Case B: Tools ran and loop ended → true-stream the LLM synthesis
-    // Case C: Hit MAX_TOOL_ROUNDS (still requesting tools) → summary + fake-stream
-
-    if (directText !== null) {
-      // Case A — fake-stream simple text response
-      const stream = new ReadableStream({
-        async start(controller) {
-          await fakeStream(directText!, [], {}, controller);
+        // ── Streaming final response ──────────────────────────────────────────
+        if (loopDirectText !== null) {
+          await fakeStream(loopDirectText!, [], {}, controller);
+          return;
         }
-      });
-      return new Response(stream, { headers: SSE_HEADERS });
-    }
 
-    if (toolCallsHappened) {
-      // Case B — true streaming synthesis after tools resolved
-      const stream = new ReadableStream({
-        async start(controller) {
-          await trueStream(userId, messages, allToolsUsed, allToolResults, controller);
+        if (loopToolCallsHappened) {
+          await trueStream(userId, currentMessages, allToolsUsed, allToolResults, controller);
+          return;
         }
-      });
-      return new Response(stream, { headers: SSE_HEADERS });
-    }
 
-    // Case C — hit MAX_TOOL_ROUNDS, ask AI to summarise what it found
-    console.warn(`[ChatAPI] Hit MAX_TOOL_ROUNDS — requesting summary`);
-    const summaryResponse = await sendChatMessage({
-      userId,
-      messages: [...messages, { role: "user", content: "Please summarise the information you found and what actions you've taken so far." }],
-      enableTools: false,
-      maxTokens: 4000,
-    });
-    const summaryText = summaryResponse.type === "text"
-      ? summaryResponse.content
-      : "I've completed several steps. Please ask a follow-up question to continue.";
+        // Case C — hit MAX_TOOL_ROUNDS
+        console.warn(`[ChatAPI] Hit MAX_TOOL_ROUNDS — requesting summary`);
+        const summaryResponse = await sendChatMessage({
+          userId,
+          messages: [...currentMessages, { role: "user", content: "Please summarise the information you found and what actions you've taken so far." }],
+          enableTools: false,
+          maxTokens: 4000,
+        });
+        const summaryText = summaryResponse.type === "text"
+          ? summaryResponse.content
+          : "I've completed several steps. Please ask a follow-up question to continue.";
 
-    const stream = new ReadableStream({
-      async start(controller) {
         await fakeStream(summaryText, allToolsUsed, allToolResults, controller);
+
+      } catch (err: any) {
+        controller.enqueue(sseEvent({ error: err.message || "Streaming failed" }));
+        controller.close();
       }
-    });
-    return new Response(stream, { headers: SSE_HEADERS });
-
-  } catch (error: any) {
-    // Pre-stream errors: return JSON so the client can parse them
-    console.error("[ChatAPI] Error:", error.message);
-
-    const knownErrors: Record<string, { status: number; message: string }> = {
-      API_KEY_MISSING:   { status: 400, message: "Please configure your AI API key in Settings." },
-      INVALID_API_KEY:   { status: 400, message: "Your authentication failed with the AI provider. Please check your API key." },
-      GROQ_KEY_MISSING:  { status: 500, message: "The AI service is not configured on the server. Please contact support." },
-      RATE_LIMIT:        { status: 429, message: "Rate limit exceeded. Please wait a moment and try again." },
-      SETTINGS_NOT_FOUND:{ status: 400, message: "Please complete your account setup in Settings before using the AI." },
-    };
-
-    const known = knownErrors[error.message];
-    if (known) {
-      return NextResponse.json({ success: false, error: error.message, message: known.message }, { status: known.status });
     }
+  });
 
-    return errorResponse(error.message || "AI Service Unavailable", 500);
-  }
+  return new Response(stream, { headers: SSE_HEADERS });
 }

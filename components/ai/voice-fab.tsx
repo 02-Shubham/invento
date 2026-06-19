@@ -15,7 +15,11 @@ import { Button } from "@/components/ui/button";
 
 type FABState = "idle" | "recording" | "processing" | "replied_incomplete" | "replied_complete";
 
-export default function VoiceFAB() {
+interface VoiceFABProps {
+  onTranscriptReady?: (text: string) => void;
+}
+
+export default function VoiceFAB({ onTranscriptReady }: VoiceFABProps) {
   const {
     isRecording,
     isProcessing,
@@ -32,6 +36,13 @@ export default function VoiceFAB() {
   const [showBubble, setShowBubble] = useState(false);
   const [isVisible, setIsVisible] = useState(false);
   const autoDismissRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const lastTranscriptRef = useRef("");
+
+  useEffect(() => {
+    if (isRecording && partialText) {
+      lastTranscriptRef.current = partialText;
+    }
+  }, [isRecording, partialText]);
 
   // ── Sync FAB state with context ──────────────────────────────────────────
 
@@ -53,6 +64,17 @@ export default function VoiceFAB() {
 
   useEffect(() => {
     if (!lastResponse) return;
+
+    // Conversational queries route to the unified chat widget
+    if (lastResponse.intent === "QUERY" || lastResponse.intent === "UNKNOWN") {
+      if (onTranscriptReady && lastTranscriptRef.current) {
+        onTranscriptReady(lastTranscriptRef.current);
+        clearResponse();
+        setShowBubble(false);
+        setFabState("idle");
+        return;
+      }
+    }
 
     if (!lastResponse.is_complete || (lastResponse.missing_fields?.length ?? 0) > 0) {
       // Multi-turn: show the follow-up question

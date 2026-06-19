@@ -6,8 +6,12 @@ import { useState } from "react";
 import AIChatWidget from "./ai-chat-widget";
 import { useVoice } from "@/lib/voice-context";
 
-export default function AIChatOverview() {
-  const [isOpen, setIsOpen] = useState(false);
+interface AIChatOverviewProps {
+  isOpen: boolean;
+  setIsOpen: (val: boolean) => void;
+}
+
+export default function AIChatOverview({ isOpen, setIsOpen }: AIChatOverviewProps) {
   const { isSupported: isVoiceSupported, startRecording } = useVoice();
 
   const handleMicClick = (e: React.MouseEvent) => {
@@ -49,8 +53,6 @@ export default function AIChatOverview() {
           </Button>
         </div>
       </div>
-
-      <AIChatWidget isOpen={isOpen} onClose={() => setIsOpen(false)} />
     </>
   );
 }
