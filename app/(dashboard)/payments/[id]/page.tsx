@@ -80,20 +80,22 @@ export default function PaymentDetailPage() {
 
     return (
         <div className="space-y-6">
-            <div className="flex items-center gap-4">
-                <Button variant="outline" size="icon" onClick={() => router.back()}>
-                    <ArrowLeft className="h-4 w-4" />
-                </Button>
-                <div>
-                    <h1 className="text-3xl font-bold tracking-tight">{payment.paymentNumber}</h1>
-                    <p className="text-muted-foreground">
-                        Recorded on {format(payment.createdAt, "MMMM d, yyyy")}
-                    </p>
+            <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
+                <div className="flex items-center gap-4">
+                    <Button variant="outline" size="icon" onClick={() => router.back()} className="shrink-0">
+                        <ArrowLeft className="h-4 w-4" />
+                    </Button>
+                    <div>
+                        <h1 className="text-3xl font-bold tracking-tight">{payment.paymentNumber}</h1>
+                        <p className="text-muted-foreground text-sm">
+                            Recorded on {format(payment.createdAt, "MMMM d, yyyy")}
+                        </p>
+                    </div>
                 </div>
-                <div className="ml-auto flex gap-2">
+                <div className="w-full sm:w-auto flex gap-2 justify-end">
                     <AlertDialog>
                         <AlertDialogTrigger asChild>
-                            <Button variant="destructive">
+                            <Button variant="destructive" className="w-full sm:w-auto">
                                 <Trash2 className="mr-2 h-4 w-4" />
                                 Delete Payment
                             </Button>

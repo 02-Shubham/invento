@@ -318,7 +318,7 @@ export function CreateInvoiceForm() {
                     />
                     
                     {/* Read-only/Editable fields */}
-                    <div className="grid grid-cols-2 gap-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                         <FormField
                             control={form.control}
                             name="customerEmail"
@@ -371,7 +371,7 @@ export function CreateInvoiceForm() {
                     <CardTitle>Invoice Details</CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-4">
-                     <div className="grid grid-cols-2 gap-4">
+                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                         <FormField
                             control={form.control}
                             name="invoiceDate"
@@ -485,13 +485,13 @@ export function CreateInvoiceForm() {
                          const lineTotal = selectedProduct ? selectedProduct.price * currentItem.quantity : 0;
 
                          return (
-                        <div key={field.id} className="flex items-end gap-4 border-b pb-4 last:border-0 last:pb-0">
+                         <div key={field.id} className="flex flex-col md:flex-row md:items-end gap-4 border-b pb-4 last:border-0 last:pb-0">
                              <FormField
                                 control={form.control}
                                 name={`items.${index}.productId`}
                                 render={({ field }) => (
-                                <FormItem className="flex-1">
-                                    <FormLabel className={index !== 0 ? "sr-only" : ""}>Product</FormLabel>
+                                <FormItem className="flex-1 w-full">
+                                    <FormLabel className={index !== 0 ? "md:sr-only" : ""}>Product</FormLabel>
                                     <Select 
                                         onValueChange={(value) => {
                                             field.onChange(value);
@@ -523,8 +523,8 @@ export function CreateInvoiceForm() {
                                 control={form.control}
                                 name={`items.${index}.quantity`}
                                 render={({ field }) => (
-                                <FormItem className="w-24">
-                                    <FormLabel className={index !== 0 ? "sr-only" : ""}>Qty</FormLabel>
+                                <FormItem className="w-full md:w-24">
+                                    <FormLabel className={index !== 0 ? "md:sr-only" : ""}>Qty</FormLabel>
                                     <FormControl>
                                     <Input 
                                         type="number" 
@@ -538,20 +538,23 @@ export function CreateInvoiceForm() {
                                 </FormItem>
                                 )}
                             />
-                            <div className="w-32 pb-2 text-right text-sm">
-                                 <span className="text-muted-foreground block text-xs mb-1">{index === 0 ? "Total" : ""}</span>
-                                 {formatCurrency(lineTotal)}
+                            <div className="flex items-center justify-between md:block w-full md:w-auto">
+                                <div className="w-full md:w-32 md:pb-2 text-left md:text-right text-sm">
+                                     <span className="text-muted-foreground md:block text-xs mb-1 md:inline hidden">{index === 0 ? "Total" : ""}</span>
+                                     <span className="text-muted-foreground text-xs mb-1 md:hidden mr-2">Total:</span>
+                                     {formatCurrency(lineTotal)}
+                                </div>
+                                <Button
+                                    type="button"
+                                    variant="ghost"
+                                    size="icon"
+                                    className="text-red-500 hover:text-red-700 hover:bg-red-50"
+                                    onClick={() => remove(index)}
+                                    disabled={fields.length === 1}
+                                >
+                                    <Trash2 className="h-4 w-4" />
+                                </Button>
                             </div>
-                            <Button
-                                type="button"
-                                variant="ghost"
-                                size="icon"
-                                className="text-red-500 hover:text-red-700 hover:bg-red-50"
-                                onClick={() => remove(index)}
-                                disabled={fields.length === 1}
-                            >
-                                <Trash2 className="h-4 w-4" />
-                            </Button>
                         </div>
                     )})}
                    

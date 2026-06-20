@@ -175,7 +175,7 @@ export default function DashboardPage() {
       </div>
 
       {/* Stats Row */}
-      <div className="grid gap-6 md:grid-cols-4">
+      <div className="grid gap-6 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4">
         <StatCard 
             title="Total Income" 
             value={formatCurrency(totalRevenue)} 
@@ -211,9 +211,9 @@ export default function DashboardPage() {
       </div>
 
       {/* Main Chart Section */}
-      <div className="grid gap-6 md:grid-cols-3">
+      <div className="grid gap-6 grid-cols-1 md:grid-cols-3">
           {/* Chart takes up 2/3 */}
-          <Card className="col-span-2 border-none shadow-sm">
+          <Card className="md:col-span-2 border-none shadow-sm">
              <CardHeader className="flex flex-row items-center justify-between pb-2">
                 <div>
                     <CardTitle className="text-base font-semibold text-gray-900">Total Income</CardTitle>
@@ -273,7 +273,7 @@ export default function DashboardPage() {
           </Card>
 
           {/* User List / Side Widget Placeholder matching INVO */}
-          <Card className="col-span-1 border-none shadow-sm">
+          <Card className="md:col-span-1 border-none shadow-sm">
              <CardHeader className="flex flex-row items-center justify-between pb-2">
                  <CardTitle className="text-base font-semibold text-gray-900">Users</CardTitle>
                  <Button size="icon" className="h-6 w-6 rounded bg-blue-600 hover:bg-blue-700 text-white">

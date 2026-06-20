@@ -100,9 +100,9 @@ export default function InvoiceDetailPage() {
 
   return (
     <div className="space-y-6 max-w-5xl mx-auto pb-20">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
         <div className="flex items-center space-x-4">
-            <Button variant="ghost" onClick={() => router.back()}>
+            <Button variant="ghost" onClick={() => router.back()} className="px-2">
                 <ArrowLeft className="mr-2 h-4 w-4" /> Back
             </Button>
             <h1 className="text-3xl font-bold tracking-tight">Invoice {invoice.invoiceNumber}</h1>
@@ -125,24 +125,25 @@ export default function InvoiceDetailPage() {
                 {invoice.status.toUpperCase().replace("_", " ")}
             </Badge>
         </div>
-        <div className="flex space-x-2">
-            <Link href={`/payments/new?customerId=${invoice.customerId}`}>
-                 <Button variant="outline">
+        <div className="flex flex-wrap gap-2 w-full sm:w-auto">
+            <Link href={`/payments/new?customerId=${invoice.customerId}`} className="flex-1 sm:flex-initial">
+                 <Button variant="outline" className="w-full">
                     <CreditCard className="mr-2 h-4 w-4" />
                     Record Payment
                  </Button>
             </Link>
-            <Button variant="destructive" size="icon" onClick={handleDelete}>
+            <Button variant="destructive" size="icon" onClick={handleDelete} className="flex-initial">
                 <Trash2 className="h-4 w-4" />
             </Button>
             
             <PDFDownloadLink
                 document={<InvoicePDF invoice={invoice} settings={settings} />}
                 fileName={`invoice-${invoice.invoiceNumber}.pdf`}
+                className="flex-1 sm:flex-initial"
             >
                 {/* @ts-ignore */}
                 {({ loading }) => (
-                    <Button disabled={loading}>
+                    <Button disabled={loading} className="w-full">
                         <Download className="mr-2 h-4 w-4" />
                         {loading ? "Generating..." : "Download PDF"}
                     </Button>
@@ -151,13 +152,13 @@ export default function InvoiceDetailPage() {
         </div>
       </div>
 
-      <div className="grid gap-6 md:grid-cols-3">
-          <Card className="col-span-2">
+      <div className="grid gap-6 grid-cols-1 md:grid-cols-3">
+          <Card className="md:col-span-2">
             <CardHeader>
                 <CardTitle>Invoice Details</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div>
                         <h3 className="font-semibold text-sm text-muted-foreground">From</h3>
                          <div className="mt-1">
@@ -165,7 +166,7 @@ export default function InvoiceDetailPage() {
                             <p className="text-sm text-muted-foreground whitespace-pre-line">{settings?.businessAddress}</p>
                             <p className="text-sm text-muted-foreground">{settings?.businessEmail}</p>
                             <p className="text-sm text-muted-foreground">{settings?.businessPhone}</p>
-                        </div>
+                         </div>
                     </div>
                     <div>
                         <h3 className="font-semibold text-sm text-muted-foreground">Bill To</h3>
@@ -173,11 +174,11 @@ export default function InvoiceDetailPage() {
                             <p className="font-medium">{invoice.customerName}</p>
                              <p className="text-sm text-muted-foreground whitespace-pre-line">{invoice.customerAddress}</p>
                             <p className="text-sm text-muted-foreground">{invoice.customerEmail}</p>
-                        </div>
+                         </div>
                     </div>
                 </div>
                 
-                <div className="grid grid-cols-3 gap-4 pt-4 border-t">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-4 border-t">
                      <div>
                         <h3 className="font-semibold text-sm text-muted-foreground">Invoice Date</h3>
                         <p>{format(invoice.createdAt, "MMM d, yyyy")}</p>

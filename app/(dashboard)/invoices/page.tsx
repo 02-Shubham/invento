@@ -189,15 +189,15 @@ export default function InvoicesPage() {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <h1 className="text-3xl font-bold tracking-tight">Invoices</h1>
-        <Button onClick={fetchInvoices} variant="outline" size="sm" className="mr-2">
-            <RefreshCw className={`h-4 w-4 ${isLoading ? 'animate-spin' : ''}`} />
+        <Button onClick={fetchInvoices} variant="outline" size="sm" className="w-full sm:w-auto">
+            <RefreshCw className={`mr-2 h-4 w-4 ${isLoading ? 'animate-spin' : ''}`} /> Refresh
         </Button>
       </div>
       
-      <div className="flex items-center justify-between py-4">
-        <div className="flex items-center gap-2">
+      <div className="flex flex-col sm:flex-row justify-between items-stretch sm:items-center gap-4 py-4">
+        <div className="flex items-center gap-2 w-full sm:max-w-sm">
             <Search className="h-4 w-4 text-muted-foreground" />
             <Input
             placeholder="Filter by customer..."
@@ -205,12 +205,12 @@ export default function InvoicesPage() {
             onChange={(event) =>
                 table.getColumn("customerName")?.setFilterValue(event.target.value)
             }
-            className="max-w-sm"
+            className="w-full"
             />
         </div>
         
-        <Link href="/invoices/new">
-            <Button>
+        <Link href="/invoices/new" className="w-full sm:w-auto">
+            <Button className="w-full sm:w-auto">
                 <Plus className="mr-2 h-4 w-4" /> Create Invoice
             </Button>
         </Link>

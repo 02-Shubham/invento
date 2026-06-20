@@ -208,19 +208,19 @@ export default function InventoryPage() {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <h1 className="text-3xl font-bold tracking-tight">Inventory</h1>
-        <div className="flex space-x-2">
+        <div className="flex items-center space-x-2 w-full sm:w-auto justify-end">
             <Button variant="outline" size="icon" onClick={fetchProducts} disabled={isLoading}>
                 <RefreshCw className={`h-4 w-4 ${isLoading ? 'animate-spin' : ''}`} />
             </Button>
             <Dialog open={isAddOpen} onOpenChange={setIsAddOpen}>
             <DialogTrigger asChild>
-                <Button>
+                <Button className="w-full sm:w-auto">
                 <Plus className="mr-2 h-4 w-4" /> Add Product
                 </Button>
             </DialogTrigger>
-            <DialogContent className="sm:max-w-[600px]">
+            <DialogContent className="sm:max-w-[600px] w-[95vw] max-h-[90vh] overflow-y-auto">
                 <DialogHeader>
                 <DialogTitle>Add New Product</DialogTitle>
                 </DialogHeader>
@@ -234,8 +234,8 @@ export default function InventoryPage() {
         </div>
       </div>
 
-      <div className="flex items-center py-4">
-        <div className="relative w-full max-w-sm">
+      <div className="flex items-center py-4 w-full">
+        <div className="relative w-full md:max-w-sm">
              <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
             <Input
             placeholder="Search products..."
@@ -243,7 +243,7 @@ export default function InventoryPage() {
             onChange={(event) =>
                 table.getColumn("name")?.setFilterValue(event.target.value)
             }
-            className="pl-8"
+            className="pl-8 w-full"
             />
         </div>
       </div>

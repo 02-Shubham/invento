@@ -40,8 +40,8 @@ export default function SettingsLayout({
       </div>
 
       <div className="flex flex-col md:flex-row gap-6">
-        <aside className="w-full md:w-64">
-          <nav className="space-y-1">
+        <aside className="w-full md:w-64 shrink-0">
+          <nav className="flex flex-row md:flex-col gap-2 overflow-x-auto pb-2 md:pb-0 md:space-y-1 border-b md:border-b-0 border-gray-100">
             {settingsRoutes.map((route) => {
               const isActive = pathname === route.href;
               return (
@@ -49,7 +49,7 @@ export default function SettingsLayout({
                   key={route.href}
                   href={route.href}
                   className={cn(
-                    "flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors",
+                    "flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors whitespace-nowrap",
                     isActive
                       ? "bg-blue-50 text-blue-600"
                       : "text-gray-600 hover:bg-gray-50 hover:text-gray-900"

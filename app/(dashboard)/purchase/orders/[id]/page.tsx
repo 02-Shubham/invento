@@ -115,7 +115,7 @@ export default function PurchaseOrderDetailPage() {
     if (!po) return <div className="p-8">Purchase Order not found</div>;
 
     return (
-        <div className="container mx-auto py-8">
+        <div className="container mx-auto px-4 sm:px-6 py-8">
             <div className="mb-6">
                 <Button variant="ghost" className="pl-0" onClick={() => router.back()}>
                     <ArrowLeft className="mr-2 h-4 w-4" />
@@ -123,7 +123,7 @@ export default function PurchaseOrderDetailPage() {
                 </Button>
             </div>
 
-            <div className="flex justify-between items-start mb-8">
+            <div className="flex flex-col sm:flex-row gap-4 justify-between items-start sm:items-center mb-8">
                 <div>
                     <h1 className="text-3xl font-bold tracking-tight flex items-center gap-4">
                         PO #{po.id.slice(0, 8).toUpperCase()}
@@ -131,12 +131,12 @@ export default function PurchaseOrderDetailPage() {
                             {(po.status || 'ordered').toUpperCase()}
                         </Badge>
                     </h1>
-                     <p className="text-muted-foreground mt-2">
+                     <p className="text-muted-foreground mt-2 text-sm">
                         Created on {po.createdAt ? format(new Date(po.createdAt), "PPP") : "N/A"}
                     </p>
                 </div>
                 {po.status !== 'received' && (
-                    <Button onClick={handleReceive} disabled={isProcessing} size="lg" className="bg-green-600 hover:bg-green-700">
+                    <Button onClick={handleReceive} disabled={isProcessing} size="lg" className="w-full sm:w-auto bg-green-600 hover:bg-green-700">
                         {isProcessing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <CheckCircle className="mr-2 h-4 w-4" />}
                         Receive Items
                     </Button>

@@ -99,9 +99,9 @@ export default function CustomerDetailPage() {
     return (
         <div className="space-y-6 max-w-6xl mx-auto pb-10">
             {/* Header / Actions */}
-            <div className="flex items-center justify-between">
+            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
                 <div className="flex items-center space-x-4">
-                    <Button variant="ghost" onClick={() => router.back()}>
+                    <Button variant="ghost" onClick={() => router.back()} className="px-2">
                         <ArrowLeft className="mr-2 h-4 w-4" /> Back
                     </Button>
                     <div>
@@ -109,17 +109,17 @@ export default function CustomerDetailPage() {
                          {customer.company && <p className="text-muted-foreground">{customer.company}</p>}
                     </div>
                 </div>
-                <div className="flex space-x-2">
-                    <Button variant="outline" onClick={() => router.push(`/customers?edit=${customerId}`)}>
+                <div className="flex flex-wrap gap-2 w-full md:w-auto">
+                    <Button variant="outline" onClick={() => router.push(`/customers?edit=${customerId}`)} className="flex-1 md:flex-initial">
                         Edit Customer
                     </Button>
-                    <Link href={`/payments/new?customerId=${customerId}`}>
-                         <Button variant="outline">
+                    <Link href={`/payments/new?customerId=${customerId}`} className="flex-1 md:flex-initial">
+                         <Button variant="outline" className="w-full">
                             <CreditCard className="mr-2 h-4 w-4" />
                             Record Payment
                          </Button>
                     </Link>
-                    <Button onClick={() => router.push(`/invoices/new?customerId=${customerId}`)}>
+                    <Button onClick={() => router.push(`/invoices/new?customerId=${customerId}`)} className="flex-1 md:flex-initial">
                         <FileText className="mr-2 h-4 w-4" />
                         Create Invoice
                     </Button>

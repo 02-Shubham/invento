@@ -301,7 +301,7 @@ export default function CustomersPage() {
                                 </FormItem>
                             )}
                         />
-                         <div className="grid grid-cols-2 gap-4">
+                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                             <FormField
                                 control={form.control}
                                 name="email"
@@ -336,7 +336,7 @@ export default function CustomersPage() {
                                 </FormItem>
                             )}
                         />
-                         <div className="grid grid-cols-2 gap-4">
+                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                             <FormField
                                 control={form.control}
                                 name="company"
@@ -372,24 +372,24 @@ export default function CustomersPage() {
 
   return (
     <div className="space-y-6">
-       <div className="flex items-center justify-between">
+       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Customers</h1>
           <p className="text-muted-foreground">Manage your customer base.</p>
         </div>
-        <Button onClick={() => setIsAddDialogOpen(true)}>
+        <Button onClick={() => setIsAddDialogOpen(true)} className="w-full sm:w-auto">
           <Plus className="mr-2 h-4 w-4" /> Add Customer
         </Button>
       </div>
 
-       <div className="flex items-center py-4">
-        <div className="relative w-full max-w-sm">
+       <div className="flex items-center py-4 w-full">
+        <div className="relative w-full md:max-w-sm">
            <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
            <Input
             placeholder="Search customers..."
             value={searchTerm}
             onChange={(event) => setSearchTerm(event.target.value)}
-            className="pl-8"
+            className="pl-8 w-full"
            />
         </div>
       </div>
