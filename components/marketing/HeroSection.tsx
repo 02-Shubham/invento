@@ -15,7 +15,7 @@ export function HeroSection() {
             New: AI-Powered Inventory Intelligence
         </div>
         
-        <h1 className="text-5xl lg:text-7xl font-bold tracking-tight text-gray-900 mb-6 max-w-4xl mx-auto leading-[1.1]">
+        <h1 className="text-4xl sm:text-5xl lg:text-7xl font-bold tracking-tight text-gray-900 mb-6 max-w-4xl mx-auto leading-[1.1]">
           Master Your Inventory. <br />
           <span className="text-transparent bg-clip-text bg-linear-to-r from-blue-600 to-indigo-600">
             Grow Your Business.
@@ -32,26 +32,26 @@ export function HeroSection() {
             </span> */}
         </h1>
         
-        <p className="text-[18px] text-gray-600 mb-10 max-w-2xl mx-auto leading-relaxed">
+        <p className="text-[16px] sm:text-[18px] text-gray-650 mb-10 max-w-2xl mx-auto leading-relaxed px-4">
           The all-in-one platform for modern businesses to manage stock, 
           automate purchase orders, and track sales without the headache.
         </p>
         
-        <div className="flex flex-col sm:flex-row items-center justify-center gap-4 mb-8">
-          <Link href="/signup">
-            <Button size="lg" className="h-12 px-8 text-base bg-blue-600 hover:bg-blue-700 shadow-xl shadow-blue-600/20 rounded-full transition-all hover:scale-105">
+        <div className="flex flex-col sm:flex-row items-center justify-center gap-4 mb-8 px-4">
+          <Link href="/signup" className="w-full sm:w-auto">
+            <Button size="lg" className="w-full sm:w-auto h-12 px-8 text-base bg-blue-600 hover:bg-blue-700 shadow-xl shadow-blue-600/20 rounded-full transition-all hover:scale-105">
               Start Free Trial
               <ArrowRight className="ml-2 h-4 w-4" />
             </Button>
           </Link>
-          <Link href="#demo">
-            <Button size="lg" variant="outline" className="h-12 px-8 text-base rounded-full border-gray-200 hover:bg-gray-50 hover:text-gray-900">
+          <Link href="#demo" className="w-full sm:w-auto">
+            <Button size="lg" variant="outline" className="w-full sm:w-auto h-12 px-8 text-base rounded-full border-gray-200 hover:bg-gray-50 hover:text-gray-900">
               View Demo
             </Button>
           </Link>
         </div>
 
-        <div className="flex items-center justify-center gap-8 text-sm text-gray-500 mb-20">
+        <div className="flex flex-col sm:flex-row items-center justify-center gap-4 sm:gap-8 text-sm text-gray-500 mb-20">
             <div className="flex items-center gap-2">
                 <CheckCircle2 className="h-4 w-4 text-green-500" />
                 <span>No credit card required</span>
