@@ -75,7 +75,7 @@ export function FeaturesSection() {
             </span>
             Intelligent Automation
         </div>
-          <p className="text-5xl font-bold text-gray-900 mb-3">
+          <p className="text-3xl sm:text-5xl font-bold text-gray-900 mb-3">
              Run your business on Autopilot
           </p>
           <p className="text-base text-gray-600">

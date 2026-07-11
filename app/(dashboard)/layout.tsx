@@ -45,12 +45,12 @@ export default function DashboardLayout({
           <AIChatOverview isOpen={chatOpen} setIsOpen={setChatOpen} />
 
           {/* VoiceFAB overlay at bottom-right */}
-          <VoiceFAB onTranscriptReady={(text) => {
+          {/* <VoiceFAB onTranscriptReady={(text) => {
             setChatOpen(true);
             setTimeout(() => {
               chatWidgetRef.current?.sendExternalMessage(text);
             }, 300);
-          }} />
+          }} /> */}
         </div>
       </VoiceProvider>
     </ProtectedRoute>
