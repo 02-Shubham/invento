@@ -319,9 +319,13 @@ const AIChatWidget = forwardRef<{ sendExternalMessage: (text: string) => void },
     ]);
 
     try {
+      const idToken = await user?.getIdToken();
       const response = await fetch("/api/ai/chat", {
         method: "POST",
-        headers: { "Content-Type": "application/json", "x-user-id": user?.uid || "" },
+        headers: {
+          "Content-Type": "application/json",
+          ...(idToken ? { Authorization: `Bearer ${idToken}` } : {}),
+        },
         body: JSON.stringify({
           message: text,
           conversationHistory: messages.map(m => ({ role: m.role, content: m.content })),

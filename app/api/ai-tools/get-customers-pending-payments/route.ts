@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCurrentUser, successResponse, errorResponse } from "@/lib/api-helpers";
-import { firestoreService } from "@/lib/firestore-service";
+import { adminService } from "@/lib/admin-service";
 
 export async function POST(req: NextRequest) {
   try {
@@ -13,7 +13,7 @@ export async function POST(req: NextRequest) {
     const { limit = 10 } = body;
 
     // Get all invoices for the user
-    const allInvoices = await firestoreService.getInvoices(user);
+    const allInvoices = await adminService.getInvoices(user);
 
     // Filter for unpaid/partially paid/overdue invoices
     const unpaidInvoices = allInvoices.filter(invoice => 

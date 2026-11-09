@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCurrentUser, successResponse, errorResponse } from "@/lib/api-helpers";
 import { sanitizeQuery } from "@/lib/validation";
-import { firestoreService } from "@/lib/firestore-service";
+import { adminService } from "@/lib/admin-service";
 import { SearchCustomersRequest, CustomerResult } from "@/types/ai-tools";
 
 export async function POST(req: NextRequest) {
@@ -19,7 +19,7 @@ export async function POST(req: NextRequest) {
     }
 
     const sanitizedQuery = sanitizeQuery(query);
-    const allCustomers = await firestoreService.getCustomers(user);
+    const allCustomers = await adminService.getCustomers(user);
 
     // Fuzzy matching locally
     const results = allCustomers.filter(customer => {

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCurrentUser, successResponse, errorResponse } from "@/lib/api-helpers";
-import { firestoreService } from "@/lib/firestore-service";
+import { adminService } from "@/lib/admin-service";
 import { GetLowStockRequest, LowStockProductResult } from "@/types/ai-tools";
 
 export async function POST(req: NextRequest) {
@@ -13,7 +13,7 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
     const { threshold = 10 } = body as GetLowStockRequest; // Default threshold 10 if not provided
 
-    const allProducts = await firestoreService.getProducts(user);
+    const allProducts = await adminService.getProducts(user);
     
     // Filter and sort
     const lowStockProducts = allProducts

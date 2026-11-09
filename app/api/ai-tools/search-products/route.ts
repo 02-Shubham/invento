@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCurrentUser, successResponse, errorResponse } from "@/lib/api-helpers";
 import { sanitizeQuery } from "@/lib/validation";
-import { firestoreService } from "@/lib/firestore-service";
+import { adminService } from "@/lib/admin-service";
 import { SearchProductsRequest, ProductResult } from "@/types/ai-tools";
 
 export async function POST(req: NextRequest) {
@@ -19,7 +19,7 @@ export async function POST(req: NextRequest) {
     }
 
     const sanitizedQuery = sanitizeQuery(query);
-    const allProducts = await firestoreService.getProducts(user);
+    const allProducts = await adminService.getProducts(user);
     
     // Fuzzy matching locally since Firestore doesn't support full-text search easily
     // This is acceptable for small-medium datasets

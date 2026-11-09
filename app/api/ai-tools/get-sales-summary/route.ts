@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCurrentUser, successResponse, errorResponse } from "@/lib/api-helpers";
-import { firestoreService } from "@/lib/firestore-service";
+import { adminService } from "@/lib/admin-service";
 import { GetSalesSummaryRequest, SalesSummaryResult } from "@/types/ai-tools";
 
 export async function POST(req: NextRequest) {
@@ -16,7 +16,7 @@ export async function POST(req: NextRequest) {
     let start = startDate ? new Date(startDate) : new Date(new Date().setDate(new Date().getDate() - 30));
     let end = endDate ? new Date(endDate) : new Date();
 
-    const allInvoices = await firestoreService.getInvoices(user);
+    const allInvoices = await adminService.getInvoices(user);
     const periodInvoices = allInvoices.filter(inv => {
         const d = new Date(inv.createdAt);
         return d >= start && d <= end;

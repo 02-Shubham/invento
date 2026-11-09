@@ -1,4 +1,4 @@
-import { firestoreService } from "@/lib/firestore-service";
+import { adminService } from "@/lib/admin-service";
 import { Product, UserSettings } from "@/types";
 
 interface ToolResult {
@@ -101,7 +101,7 @@ async function executeSearchProducts(
       // Simple sanitization
       const sanitizedQuery = query.trim().toLowerCase();
       
-      const allProducts = await firestoreService.getProducts(userId);
+      const allProducts = await adminService.getProducts(userId);
       
       // Fuzzy matching locally
       const results = allProducts.filter(product => {
@@ -143,7 +143,7 @@ async function executeSearchCustomers(
       
       const sanitizedQuery = (query || "").trim().toLowerCase();
       
-      const allCustomers = await firestoreService.getCustomers(userId);
+      const allCustomers = await adminService.getCustomers(userId);
       
       let results = allCustomers;
       
@@ -190,7 +190,7 @@ async function executeGetCustomersPendingPayments(
       const { limit = 10 } = input;
       
       // Get all invoices for the user
-      const allInvoices = await firestoreService.getInvoices(userId);
+      const allInvoices = await adminService.getInvoices(userId);
       
       // Filter for unpaid/partially paid/overdue invoices
       const unpaidInvoices = allInvoices.filter(invoice => 
@@ -273,16 +273,16 @@ async function executeCreateInvoice(
       return { success: false, error: "Customer ID and Items are required" };
     }
 
-    const customer = await firestoreService.getCustomerById(customerId, userId);
+    const customer = await adminService.getCustomerById(customerId, userId);
     if (!customer) {
       return { success: false, error: "Customer not found" };
     }
 
     // Bug #5 fix: read tax rate from user settings instead of hardcoding 0
-    const settings = await firestoreService.getUserSettings(userId) as UserSettings | null;
+    const settings = await adminService.getUserSettings(userId) as UserSettings | null;
     const taxRatePct = (settings?.taxRate ?? 0); // percentage, e.g. 18 for 18%
 
-    const allProducts = await firestoreService.getProducts(userId);
+    const allProducts = await adminService.getProducts(userId);
     const invoiceItems = [];
     let subtotal = 0;
 
@@ -333,12 +333,12 @@ async function executeCreateInvoice(
       dueDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(), // 30 days
     };
 
-    const invoiceId = await firestoreService.createInvoiceWithStockUpdate(newInvoiceData, userId);
-    await firestoreService.updateCustomerStats(customerId, total, userId);
+    const invoiceId = await adminService.createInvoiceWithStockUpdate(newInvoiceData, userId);
+    await adminService.updateCustomerStats(customerId, total, userId);
     
     // Update customer outstanding balance
     const currentOutstanding = customer.totalOutstanding || 0;
-    await firestoreService.updateCustomer(customerId, {
+    await adminService.updateCustomer(customerId, {
       totalOutstanding: currentOutstanding + total
     }, userId);
 
@@ -372,7 +372,7 @@ async function executeAdjustStock(
       return { success: false, error: "Product ID and non-zero Quantity are required" };
     }
 
-    const product = await firestoreService.getProductById(productId, userId);
+    const product = await adminService.getProductById(productId, userId);
     if (!product) {
       return { success: false, error: "Product not found" };
     }
@@ -385,7 +385,7 @@ async function executeAdjustStock(
       };
     }
 
-    const transactionId = await firestoreService.addInventoryTransaction({
+    const transactionId = await adminService.addInventoryTransaction({
       productId,
       productName: product.name,
       quantity,
@@ -417,7 +417,7 @@ async function executeGetRevenueReport(
     let start = startDate ? new Date(startDate) : new Date(new Date().setDate(new Date().getDate() - 30));
     let end = endDate ? new Date(endDate) : new Date();
 
-    const allInvoices = await firestoreService.getInvoices(userId);
+    const allInvoices = await adminService.getInvoices(userId);
     const periodInvoices = allInvoices.filter(inv => {
       const d = new Date(inv.createdAt);
       return d >= start && d <= end;
@@ -472,7 +472,7 @@ async function executeGetLowStockProducts(
 ): Promise<ToolResult> {
   try {
     const { threshold = 10 } = input;
-    const allProducts = await firestoreService.getProducts(userId);
+    const allProducts = await adminService.getProducts(userId);
     
     const lowStockProducts = allProducts
       .filter(p => (p.stockQuantity || 0) < threshold)
@@ -529,7 +529,7 @@ async function executeAddProduct(
       totalValue: Number(stockQuantity) * (Number(price) * 0.7),
     };
 
-    const productId = await firestoreService.addProduct(newProductData, userId);
+    const productId = await adminService.addProduct(newProductData, userId);
 
     return {
       success: true,

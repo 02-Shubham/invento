@@ -29,11 +29,13 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { firestoreService } from "@/lib/firestore-service";
 import { InventoryTransaction, Product, TransactionType } from "@/types";
-import { collection, onSnapshot, query, orderBy } from "firebase/firestore";
+import { collection, onSnapshot, query, where } from "firebase/firestore";
 import { db } from "@/lib/firebase";
+import { useAuth } from "@/lib/auth-context";
 import { formatCurrency } from "@/lib/utils";
 
 export default function StockHistoryPage() {
+  const { user } = useAuth();
   const [transactions, setTransactions] = useState<InventoryTransaction[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
@@ -43,24 +45,43 @@ export default function StockHistoryPage() {
   const [typeFilter, setTypeFilter] = useState<string>("all");
 
   useEffect(() => {
-    // Fetch Products for filter
-    const qProd = query(collection(db, "products"), orderBy("name"));
-    const unsubProd = onSnapshot(qProd, (snapshot) => {
-        setProducts(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Product)));
-    });
+    if (!user) return;
 
-    // Fetch Transactions (Real-time for now, ideally filtered server-side)
-    const qTrans = query(collection(db, "inventory_transactions"), orderBy("createdAt", "desc"));
-    const unsubTrans = onSnapshot(qTrans, (snapshot) => {
-        setTransactions(snapshot.docs.map(doc => firestoreService.convertTransaction(doc)) as unknown as InventoryTransaction[]);
+    // Only this user's data. Sorting happens in the browser so these
+    // queries need no composite Firestore indexes.
+    // Fetch Products for filter
+    const qProd = query(collection(db, "products"), where("userId", "==", user.uid));
+    const unsubProd = onSnapshot(
+      qProd,
+      (snapshot) => {
+        const prods = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Product));
+        prods.sort((a, b) => (a.name || "").localeCompare(b.name || ""));
+        setProducts(prods);
+      },
+      (error) => console.error("Failed to load products:", error)
+    );
+
+    // Fetch Transactions (Real-time for now)
+    const qTrans = query(collection(db, "inventory_transactions"), where("userId", "==", user.uid));
+    const unsubTrans = onSnapshot(
+      qTrans,
+      (snapshot) => {
+        const txns = snapshot.docs.map(doc => firestoreService.convertTransaction(doc)) as unknown as InventoryTransaction[];
+        txns.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+        setTransactions(txns);
         setLoading(false);
-    });
+      },
+      (error) => {
+        console.error("Failed to load stock history:", error);
+        setLoading(false);
+      }
+    );
 
     return () => {
         unsubProd();
         unsubTrans();
     };
-  }, []);
+  }, [user]);
 
   const filteredTransactions = transactions.filter(t => {
       const matchProduct = productFilter === "all" || t.productId === productFilter;

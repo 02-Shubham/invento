@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCurrentUser, successResponse, errorResponse } from "@/lib/api-helpers";
-import { firestoreService } from "@/lib/firestore-service"; // We might need to extend this service or write direct firestore code for transactions if methods are missing
+import { adminService } from "@/lib/admin-service"; // We might need to extend this service or write direct firestore code for transactions if methods are missing
 import { CreateInvoiceRequest, InvoiceResult } from "@/types/ai-tools";
 import { db } from "@/lib/firebase";
 import { collection, doc, runTransaction, Timestamp } from "firebase/firestore";
@@ -10,7 +10,7 @@ import { collection, doc, runTransaction, Timestamp } from "firebase/firestore";
 // The AI tool requirements ask for specific error format and checks.
 // It's safer to reuse `firestoreService` if possible, but for strict customized response/error handling
 // and keeping all AI logic isolated, I will implement the transaction here using the same pattern.
-// actually, firestoreService.createInvoiceWithStockUpdate logic is almost identical. 
+// actually, adminService.createInvoiceWithStockUpdate logic is almost identical. 
 // Let's reuse it but wrap it to match the API response format.
 
 export async function POST(req: NextRequest) {
@@ -28,7 +28,7 @@ export async function POST(req: NextRequest) {
     }
 
     // 1. Validate Customer
-    const customer = await firestoreService.getCustomerById(customerId, user);
+    const customer = await adminService.getCustomerById(customerId, user);
     if (!customer) {
         return errorResponse("Customer not found");
     }
@@ -40,7 +40,7 @@ export async function POST(req: NextRequest) {
     // So we need to reconstruct the full invoice object first.
     
     // We can do this verification + object construction here.
-    const allProducts = await firestoreService.getProducts(user);
+    const allProducts = await adminService.getProducts(user);
     const invoiceItems = [];
     let subtotal = 0;
 
@@ -98,14 +98,14 @@ export async function POST(req: NextRequest) {
     // Note: The service might throw if stock changed in between. Catch that.
     
     try {
-        const invoiceId = await firestoreService.createInvoiceWithStockUpdate(newInvoiceData, user);
+        const invoiceId = await adminService.createInvoiceWithStockUpdate(newInvoiceData, user);
         
         // 3. Update Customer Stats (Not handled by createInvoiceWithStockUpdate in service yet? - Checking service...)
         // Checking `lib/firestore-service.ts`: createInvoiceWithStockUpdate checks stock, creates invoice, logs txn.
         // It DOES NOT update customer stats (`totalSpent`, `totalInvoices`, `totalOutstanding`).
         // We should add that here.
         
-        await firestoreService.updateCustomerStats(customerId, total, user);
+        await adminService.updateCustomerStats(customerId, total, user);
         // Also update outstanding? updateCustomerStats implementation:
         // totalSpent += total, totalInvoices += 1.
         // It does NOT update `totalOutstanding`. We need to do that manually or fix the service.
@@ -116,7 +116,7 @@ export async function POST(req: NextRequest) {
         // Ideally should be in one transaction but firestoreService splits them.
         // Given the constraints, I'll update it separately.
         const currentOutstanding = customer.totalOutstanding || 0;
-        await firestoreService.updateCustomer(customerId, {
+        await adminService.updateCustomer(customerId, {
             totalOutstanding: currentOutstanding + total
         }, user);
 

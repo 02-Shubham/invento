@@ -1,8 +1,12 @@
-import { firestoreService } from "@/lib/firestore-service";
+import { adminService } from "@/lib/admin-service";
 import OpenAI from "openai";
 import Groq from "groq-sdk";
 import { UserSettings } from "@/types";
 import { AI_TOOLS } from './ai-tools-schema';
+
+// Groq retires models from time to time (llama-3.3-70b-versatile is gone).
+// Override with GROQ_MODEL in .env; see https://console.groq.com/docs/models
+const GROQ_MODEL = process.env.GROQ_MODEL || 'openai/gpt-oss-120b';
 
 interface ChatMessage {
   role: "user" | "assistant" | "system" | "tool";
@@ -65,7 +69,7 @@ export type AIResponse =
 // ── Helper: build provider-agnostic client & settings ────────────────────────
 
 async function resolveProvider(userId: string) {
-  const settings = await firestoreService.getUserSettings(userId) as UserSettings;
+  const settings = await adminService.getUserSettings(userId) as UserSettings;
   if (!settings) throw new Error("SETTINGS_NOT_FOUND");
   const rawProvider = settings.aiProvider || 'groq';
   const provider = rawProvider === 'google' ? 'groq' : rawProvider;
@@ -130,7 +134,7 @@ export async function sendChatMessage(options: ChatOptions): Promise<AIResponse>
     const apiKey = process.env.GROQ_API_KEY;
     if (!apiKey) throw new Error("GROQ_KEY_MISSING");
     const client = new Groq({ apiKey });
-    const model = 'llama-3.3-70b-versatile';
+    const model = GROQ_MODEL;
 
     try {
       const response = await client.chat.completions.create({
@@ -234,7 +238,7 @@ export async function* sendChatMessageStream(options: ChatOptions): AsyncGenerat
     const apiKey = process.env.GROQ_API_KEY;
     if (!apiKey) throw new Error("GROQ_KEY_MISSING");
     const client = new Groq({ apiKey });
-    const model = 'llama-3.3-70b-versatile';
+    const model = GROQ_MODEL;
 
     try {
       const stream = await client.chat.completions.create({

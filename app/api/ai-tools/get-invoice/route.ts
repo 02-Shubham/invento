@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCurrentUser, successResponse, errorResponse } from "@/lib/api-helpers";
-import { firestoreService } from "@/lib/firestore-service";
+import { adminService } from "@/lib/admin-service";
 
 export async function POST(req: NextRequest) {
   try {
@@ -16,7 +16,7 @@ export async function POST(req: NextRequest) {
       return errorResponse("Invoice ID is required");
     }
 
-    const invoice = await firestoreService.getInvoiceById(invoiceId, user);
+    const invoice = await adminService.getInvoiceById(invoiceId, user);
 
     if (!invoice) {
         return errorResponse("Invoice not found", 404);
