@@ -80,6 +80,7 @@ export const openApiSpec = {
   servers: [{ url: "/", description: "This server" }],
   tags: [
     { name: "AI", description: "LLM-backed endpoints" },
+    { name: "Approvals", description: "Review, approve or reject write actions proposed by the AI assistant" },
     { name: "Products & Stock", description: "Search products, check and add stock" },
     { name: "Customers", description: "Search and create customers" },
     { name: "Invoices & Payments", description: "Create invoices, record payments, look up invoices" },
@@ -101,13 +102,14 @@ export const openApiSpec = {
           "|---|---|",
           "| `{\"step\": {\"tool\": \"search_products\", \"status\": \"running\"}}` | A tool started |",
           "| `{\"step\": {\"tool\": \"search_products\", \"status\": \"done\", \"summary\": \"Found 3 products\"}}` | A tool finished |",
+          "| `{\"proposal\": {...}}` | A write action was prepared and awaits approval (an `ActionView`, see schemas) |",
           "| `{\"token\": \"Hello\"}` | A piece of the answer text |",
           "| `{\"done\": true, \"toolsUsed\": [...], \"toolResults\": {...}}` | Stream finished (final event) |",
           "| `{\"error\": \"...\"}` | Failure after the stream started |",
           "",
           "**Tools the assistant can use:** `search_products`, `search_customers`, `get_customers_with_pending_payments`, `create_invoice`, `adjust_stock`, `get_revenue_report`, `get_low_stock_products`, `add_product`.",
           "",
-          "⚠️ Write tools (`create_invoice`, `adjust_stock`, `add_product`) execute immediately; there is no confirmation step yet.",
+          "**Write tools need the owner's approval.** `create_invoice`, `adjust_stock` and `add_product` never execute from chat: they validate the request and emit a `proposal` event. Nothing changes until the owner calls `POST /api/ai/actions/{id}/approve`. At most one proposal is created per message.",
           "",
           "The AI provider is chosen from the user's settings (default: Groq, model from `GROQ_MODEL`).",
           "",
@@ -205,6 +207,64 @@ export const openApiSpec = {
             },
           },
           ...stdErrors,
+        },
+      },
+    },
+
+    // ───────────────────────── Approvals ─────────────────────────
+    "/api/ai/actions/{id}": {
+      get: {
+        tags: ["Approvals"],
+        summary: "Get the state of a proposed action",
+        description:
+          "Returns the current state of an action the assistant proposed. Only the owner can see it; any other user gets 404. A pending action past its expiry is reported as `expired`.",
+        parameters: [{ $ref: "#/components/parameters/ActionId" }],
+        responses: {
+          "200": { description: "The action", content: { "application/json": { schema: { $ref: "#/components/schemas/ActionResponse" } } } },
+          "401": { $ref: "#/components/responses/Unauthorized" },
+          "404": errorRef("Not found (or belongs to another user)"),
+        },
+      },
+    },
+
+    "/api/ai/actions/{id}/approve": {
+      post: {
+        tags: ["Approvals"],
+        summary: "Approve and execute a proposed action",
+        description: [
+          "Executes the action the assistant proposed. **The request has no body**: the server runs exactly the input it stored when the action was proposed, so what the owner saw on the card is what is committed.",
+          "",
+          "Executes **at most once**: concurrent or repeated calls (double click, second tab) are resolved atomically — one succeeds, the rest get `409`.",
+          "",
+          "If the world changed since the proposal (for example stock dropped), the call returns **HTTP 200 with `success: false`** and the action ends as `failed`; nothing is changed.",
+          "",
+          "Proposals expire after 24 hours (`410`).",
+        ].join("\n"),
+        parameters: [{ $ref: "#/components/parameters/ActionId" }],
+        responses: {
+          "200": {
+            description: "Executed (`success: true`, status `done`) or could not be completed (`success: false`, status `failed`)",
+            content: { "application/json": { schema: { $ref: "#/components/schemas/ActionResponse" } } },
+          },
+          "401": { $ref: "#/components/responses/Unauthorized" },
+          "404": errorRef("Not found (or belongs to another user)"),
+          "409": { description: "Already handled (approved, rejected, failed or expired)", content: { "application/json": { schema: { $ref: "#/components/schemas/ActionResponse" } } } },
+          "410": { description: "The proposal expired", content: { "application/json": { schema: { $ref: "#/components/schemas/ActionResponse" } } } },
+        },
+      },
+    },
+
+    "/api/ai/actions/{id}/reject": {
+      post: {
+        tags: ["Approvals"],
+        summary: "Reject a proposed action",
+        description: "Discards the proposal. Nothing is written to business data. Only possible while the action is `pending`.",
+        parameters: [{ $ref: "#/components/parameters/ActionId" }],
+        responses: {
+          "200": { description: "Rejected", content: { "application/json": { schema: { $ref: "#/components/schemas/ActionResponse" } } } },
+          "401": { $ref: "#/components/responses/Unauthorized" },
+          "404": errorRef("Not found (or belongs to another user)"),
+          "409": { description: "Already handled", content: { "application/json": { schema: { $ref: "#/components/schemas/ActionResponse" } } } },
         },
       },
     },
@@ -545,6 +605,15 @@ export const openApiSpec = {
         description: "A Firebase Auth **ID token** (not a refresh token or API key). Expires after 1 hour.",
       },
     },
+    parameters: {
+      ActionId: {
+        name: "id",
+        in: "path",
+        required: true,
+        description: "Id of the proposed action (from the `proposal` event of /api/ai/chat)",
+        schema: { type: "string" },
+      },
+    },
     responses: {
       Unauthorized: errorRef("Missing, invalid or expired ID token"),
       ServerError: errorRef("Unexpected server error (`details` holds the message)"),
@@ -557,6 +626,45 @@ export const openApiSpec = {
           success: { type: "boolean", example: false },
           error: { type: "string", example: "Unauthorized" },
           details: { description: "Extra detail, mainly on 500s" },
+        },
+      },
+      ActionView: {
+        type: "object",
+        description: "An AI-proposed write action as shown to the owner.",
+        properties: {
+          id: { type: "string" },
+          tool: { type: "string", enum: ["create_invoice", "adjust_stock", "add_product"] },
+          status: { type: "string", enum: ["pending", "executing", "done", "failed", "rejected", "expired"] },
+          preview: { $ref: "#/components/schemas/ActionPreview" },
+          expiresAt: { type: "string", format: "date-time" },
+          result: { type: "object", additionalProperties: true, description: "Present when status is `done` (e.g. the created invoice)" },
+          error: { type: "string", description: "Present when status is `failed`" },
+        },
+      },
+      ActionPreview: {
+        type: "object",
+        description: "What the approval card shows. Built by the server from validated data, never by the client.",
+        properties: {
+          title: { type: "string", example: "Create invoice" },
+          subtitle: { type: "string", example: "Ramesh Traders" },
+          lines: {
+            type: "array",
+            items: {
+              type: "object",
+              properties: { label: { type: "string" }, quantity: { type: "number" }, unitPrice: { type: "number" }, amount: { type: "number" } },
+            },
+          },
+          details: { type: "array", items: { type: "object", properties: { label: { type: "string" }, value: { type: "string" } } } },
+          totals: { type: "array", items: { type: "object", properties: { label: { type: "string" }, amount: { type: "number" }, bold: { type: "boolean" } } } },
+          warnings: { type: "array", items: { type: "string" }, description: "Non-blocking things the owner should know" },
+        },
+      },
+      ActionResponse: {
+        type: "object",
+        properties: {
+          success: { type: "boolean" },
+          error: { type: "string" },
+          action: { $ref: "#/components/schemas/ActionView" },
         },
       },
       ChatTurn: {

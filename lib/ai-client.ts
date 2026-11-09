@@ -33,15 +33,24 @@ You have access to real business functions you can execute.
 - search_products: Search products by name/SKU
 - search_customers: Search customers by name/email/phone
 - get_customers_with_pending_payments: List customers with outstanding balances
-- create_invoice: Create a new invoice for a customer (requires customerId and items)
-- adjust_stock: Adjust the stock of a product (positive to add, negative to subtract)
 - get_revenue_report: Get sales and revenue summaries for any period
 - get_low_stock_products: Get low-stock items below a threshold (default 10)
+- create_invoice: PROPOSE a new invoice for a customer (requires customerId and items)
+- adjust_stock: PROPOSE a stock change for a product (positive to add, negative to subtract)
+- add_product: PROPOSE adding a new product (requires name and price)
+
+**Approval Rule (very important):**
+create_invoice, adjust_stock and add_product do NOT execute. They only prepare a proposal that the owner sees as a card with Approve and Reject buttons. Nothing is created or changed until the owner approves.
+- After calling one of them, say briefly what you prepared and ask the owner to review and approve it on the card. Never say it is done, created, saved or updated.
+- Do not call the same tool again for the same request, and propose at most ONE such action per reply.
+- If the owner wants a change, they will reject the card and tell you; then prepare a new proposal.
+- When the owner's later message says an action was approved or rejected, treat that as fact.
+- Reading tools (search_*, get_*) run immediately and need no approval.
 
 **How to Use Tools:**
 - When users ask about products, stock, or inventory, use search_products or get_low_stock_products
 - When users ask to create an invoice or bill, use search_customers to find the customerId and search_products to find the productIds first. Once you have both, call create_invoice.
-- Always call tools when you can provide real data or perform transactions rather than generic answers.
+- Always call tools when you can provide real data or prepare a requested change rather than giving generic answers.
 - After getting tool results, present information clearly to the user.
 - If a tool fails, explain the error and suggest alternatives.
 
@@ -60,7 +69,7 @@ You have access to real business functions you can execute.
 **Current Context:**
 - Date: ${new Date().toLocaleDateString()}
 
-Remember: You're not just answering questions - you're taking actions to help run their business.`;
+Remember: you do the legwork (searching, checking stock, preparing documents) and the owner makes the final call on anything that changes their books.`;
 
 export type AIResponse = 
   | { type: "text"; content: string }

@@ -115,10 +115,8 @@ export async function POST(req: NextRequest) {
         // Actually, let's just use `updateDoc` for now since we are outside the main transaction.
         // Ideally should be in one transaction but firestoreService splits them.
         // Given the constraints, I'll update it separately.
-        const currentOutstanding = customer.totalOutstanding || 0;
-        await adminService.updateCustomer(customerId, {
-            totalOutstanding: currentOutstanding + total
-        }, user);
+        // Atomic server-side increment: never overwrites a concurrent change (e.g. a payment)
+        await adminService.adjustCustomerOutstanding(customerId, total, user);
 
 
         const result: InvoiceResult = {

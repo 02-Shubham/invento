@@ -9,7 +9,7 @@
  * enforce `userId` ownership itself. `userId` must always come from
  * `getCurrentUser()` (a verified ID token), never from request input.
  */
-import { Timestamp } from "firebase-admin/firestore";
+import { Timestamp, FieldValue } from "firebase-admin/firestore";
 import { adminDb } from "@/lib/firebase-admin";
 import {
   Product,
@@ -83,6 +83,16 @@ export const adminService = {
     // Never allow re-parenting a document to another user
     const { userId: _ignored, ...safe } = data as any;
     await ref.update({ ...safe, updatedAt: now() });
+  },
+
+  /**
+   * Atomically add `delta` (may be negative) to a customer's outstanding balance.
+   * Uses a server-side increment, so it can never overwrite a concurrent change
+   * (e.g. a payment recorded while an approval was pending).
+   */
+  async adjustCustomerOutstanding(customerId: string, delta: number, userId: string) {
+    const ref = await assertOwned("customers", customerId, userId, "customer");
+    await ref.update({ totalOutstanding: FieldValue.increment(delta), updatedAt: now() });
   },
 
   getCustomers: (userId: string) => listOwned<Customer>("customers", userId),
@@ -315,6 +325,13 @@ export const adminService = {
       const currentStock = product.stockQuantity || 0;
       const currentAvgCost = product.averageCost || 0;
       const newStock = currentStock + transactionData.quantity;
+
+      // Checked inside the transaction so concurrent movements can't push stock negative
+      if (newStock < 0) {
+        throw new Error(
+          `Cannot reduce stock below 0. Current stock is ${currentStock}, change is ${transactionData.quantity}.`
+        );
+      }
 
       let newAvgCost = currentAvgCost;
       if (transactionData.quantity > 0 && transactionData.unitCost !== undefined && newStock > 0) {
