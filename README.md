@@ -12,6 +12,7 @@ A modern, multi-tenant SaaS platform for inventory and invoice management built 
 - 👥 **Customer Management** - Track customers and their purchase history
 - 🤖 **AI API Key Management** - Add your own API keys for future AI features
 - 🎨 **Modern UI** - Beautiful, responsive interface built with Tailwind CSS and shadcn/ui
+- 📚 **API Docs (Swagger)** - Interactive docs at [`/api-docs`](http://localhost:3000/api-docs) while the dev server runs; raw OpenAPI 3.0 JSON at `/api/openapi` (source: `lib/openapi-spec.ts` — update it when you change anything under `app/api/`)
 
 ## Tech Stack
 
