@@ -28,7 +28,7 @@ import { Trash2, Plus, CalendarIcon, Loader2, Check, ChevronDown } from "lucide-
 import { useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { format } from "date-fns";
-import { cn } from "@/lib/utils";
+import { cn, formatCurrency } from "@/lib/utils";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
 import { toast } from "sonner";
@@ -153,13 +153,6 @@ export function CreateInvoiceForm() {
   };
 
   const { subtotal, total } = calculateTotals();
-
-  const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat("en-US", { 
-        style: "currency", 
-        currency: settings?.currency || "USD" 
-    }).format(amount);
-  }
 
   const handleCustomerSelect = (customer: Customer) => {
       form.setValue("customerId", customer.id);

@@ -11,12 +11,15 @@ import {
   signInWithPopup,
 } from "firebase/auth";
 import { auth, db } from "./firebase";
-import { doc, setDoc, getDoc, serverTimestamp } from "firebase/firestore";
+import { doc, setDoc, getDoc, onSnapshot, serverTimestamp } from "firebase/firestore";
 import { toast } from "sonner";
+import { DEFAULT_CURRENCY, getActiveCurrency, setActiveCurrency } from "./utils";
 
 interface AuthContextType {
   user: User | null;
   loading: boolean;
+  /** The user's saved currency code (e.g. "INR"). Consumers re-render when it changes. */
+  currency: string;
   signIn: (email: string, password: string) => Promise<void>;
   signUp: (email: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
@@ -28,6 +31,45 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
+  const [currency, setCurrency] = useState<string>(DEFAULT_CURRENCY);
+
+  // Keep the formatter's currency in sync with the user's saved setting, live.
+  // The last known value is cached per user so a page reload doesn't flash the default.
+  useEffect(() => {
+    if (!user) {
+      setActiveCurrency(DEFAULT_CURRENCY);
+      setCurrency(DEFAULT_CURRENCY);
+      return;
+    }
+
+    const cacheKey = `invento:currency:${user.uid}`;
+    try {
+      const cached = localStorage.getItem(cacheKey);
+      if (cached) {
+        setActiveCurrency(cached);
+        setCurrency(getActiveCurrency());
+      }
+    } catch {
+      /* storage unavailable (private mode etc.) — fine */
+    }
+
+    const unsubscribe = onSnapshot(
+      doc(db, "user_settings", user.uid),
+      (snap) => {
+        // Set the formatter first so consumers re-rendering from setCurrency see the new value
+        setActiveCurrency(snap.data()?.currency);
+        const active = getActiveCurrency();
+        setCurrency(active);
+        try {
+          localStorage.setItem(cacheKey, active);
+        } catch {
+          /* ignore */
+        }
+      },
+      (error) => console.error("Error watching user settings:", error)
+    );
+    return () => unsubscribe();
+  }, [user]);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
@@ -145,7 +187,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   return (
-    <AuthContext.Provider value={{ user, loading, signIn, signUp, logout, signInWithGoogle }}>
+    <AuthContext.Provider value={{ user, loading, currency, signIn, signUp, logout, signInWithGoogle }}>
       {children}
     </AuthContext.Provider>
   );

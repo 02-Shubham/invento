@@ -87,7 +87,7 @@ function getToolSummary(toolName: string, result: any): string {
     case "get_customers_with_pending_payments":
       return `Found ${data.count || data.customers?.length || 0} outstanding accounts`;
     case "create_invoice":
-      return `Created ${data.invoiceNumber} (${data.itemsCount} items, Total: $${data.totalAmount})`;
+      return `Created ${data.invoiceNumber} (${data.itemsCount} items)`;
     case "adjust_stock":
       return `Adjusted stock by ${data.quantityAdjusted} (New stock: ${data.newStockLevel})`;
     case "get_revenue_report":

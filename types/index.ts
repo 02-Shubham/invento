@@ -197,6 +197,8 @@ export interface UserSettings {
   // Tax rate applied to invoices (0–100, as a percentage). E.g. 18 = 18% GST.
   // Defaults to 0 if not configured.
   taxRate?: number;
+  // ISO currency code chosen in onboarding / settings (INR, USD, EUR, GBP, JPY, AUD, CAD).
+  currency?: string;
   onboardingDismissed?: boolean;
   updatedAt?: Date;
 }

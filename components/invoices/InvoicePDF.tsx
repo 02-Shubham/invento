@@ -1,6 +1,7 @@
 import { Page, Text, View, Document, StyleSheet } from '@react-pdf/renderer';
 import { Invoice } from '@/types';
 import { format } from 'date-fns';
+import { formatMoney } from '@/lib/utils';
 
 const styles = StyleSheet.create({
   page: {
@@ -97,12 +98,8 @@ interface InvoicePDFProps {
 }
 
 export const InvoicePDF = ({ invoice, settings }: InvoicePDFProps) => {
-    const formatCurrency = (amount: number) => {
-        return new Intl.NumberFormat("en-US", { 
-            style: "currency", 
-            currency: settings?.currency || "USD" 
-        }).format(amount);
-    }
+    // Uses the user's saved currency; ASCII-safe because the PDF's built-in font has no ₹ glyph
+    const formatCurrency = (amount: number) => formatMoney(amount, undefined, { asciiSafe: true });
   
     const invoiceItems = Array.isArray(invoice.items) 
         ? invoice.items 
