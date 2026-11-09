@@ -2,6 +2,7 @@
 
 import { useStore } from "@/lib/store"; // Keeping for settings/other if needed, but removing product/actions
 import { useAuth } from "@/lib/auth-context";
+import { formatCurrency } from "@/lib/utils";
 import { useVoice } from "@/lib/voice-context";
 import { Product } from "@/types";
 import { useState, useEffect } from "react";
@@ -98,10 +99,7 @@ export default function InventoryPage() {
       header: "Price",
       cell: ({ row }) => {
         const price = parseFloat(row.getValue("price"));
-        return new Intl.NumberFormat("en-US", {
-          style: "currency",
-          currency: "USD",
-        }).format(price);
+        return formatCurrency(price);
       },
     },
     {

@@ -25,6 +25,8 @@ import {
   PendingPaymentsCard,
   ProductCreatedCard
 } from "@/components/ai/tool-result-cards";
+import ProposalCard, { describeOutcome } from "@/components/ai/proposal-card";
+import type { ActionView } from "@/lib/pending-actions";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -36,6 +38,8 @@ interface Message {
   toolsUsed?: string[];
   isStreaming?: boolean; // true while tokens are arriving
   toolResultsData?: Record<string, any>;
+  /** AI-proposed write actions awaiting (or past) the owner's decision. */
+  proposals?: ActionView[];
 }
 
 interface SavedConversation {
@@ -148,6 +152,33 @@ const AIChatWidget = forwardRef<{ sendExternalMessage: (text: string) => void },
   const inputRef = useRef<HTMLInputElement>(null);
   const historyRef = useRef<HTMLDivElement>(null);
 
+  // ── Approval cards ─────────────────────────────────────────────────────────
+  // Called when the server reports a new state for a proposal. Updates the card
+  // and, once, adds a short assistant message with the outcome — the history sent
+  // to the model contains only message text, so this is how it learns what happened.
+  const handleProposalResolved = useCallback((messageId: string, view: ActionView) => {
+    setMessages(prev => {
+      const msg = prev.find(m => m.id === messageId);
+      const old = msg?.proposals?.find(p => p.id === view.id);
+      const wasOpen = !old || old.status === "pending" || old.status === "executing";
+      const terminal = ["done", "rejected", "failed", "expired"].includes(view.status);
+
+      const updated = prev.map(m =>
+        m.id === messageId
+          ? { ...m, proposals: (m.proposals ?? []).map(p => (p.id === view.id ? view : p)) }
+          : m
+      );
+
+      if (wasOpen && terminal && old?.status !== view.status) {
+        const text = describeOutcome(view);
+        if (text) {
+          return [...updated, { id: generateId(), role: "assistant" as const, content: text, timestamp: new Date() }];
+        }
+      }
+      return updated;
+    });
+  }, []);
+
   // ── Debounced persistence ─────────────────────────────────────────────────
   const debouncedMessages = useDebounce(messages, 2000);
 
@@ -164,6 +195,7 @@ const AIChatWidget = forwardRef<{ sendExternalMessage: (text: string) => void },
             timestamp: m.timestamp.toISOString(),
             toolsUsed: m.toolsUsed ?? [],
             toolResultsData: m.toolResultsData ?? null,
+            proposals: m.proposals ?? null,
           })),
         });
       } catch (err) {
@@ -234,6 +266,7 @@ const AIChatWidget = forwardRef<{ sendExternalMessage: (text: string) => void },
           timestamp: new Date(m.timestamp),
           isStreaming: false,
           toolResultsData: m.toolResultsData ?? undefined,
+          proposals: m.proposals ?? undefined,
         }))
       );
       setConversationId(conv.id);
@@ -319,9 +352,13 @@ const AIChatWidget = forwardRef<{ sendExternalMessage: (text: string) => void },
     ]);
 
     try {
+      const idToken = await user?.getIdToken();
       const response = await fetch("/api/ai/chat", {
         method: "POST",
-        headers: { "Content-Type": "application/json", "x-user-id": user?.uid || "" },
+        headers: {
+          "Content-Type": "application/json",
+          ...(idToken ? { Authorization: `Bearer ${idToken}` } : {}),
+        },
         body: JSON.stringify({
           message: text,
           conversationHistory: messages.map(m => ({ role: m.role, content: m.content })),
@@ -378,6 +415,18 @@ const AIChatWidget = forwardRef<{ sendExternalMessage: (text: string) => void },
               prev.map(m =>
                 m.id === streamingMsgId
                   ? { ...m, content: fullContent, isStreaming: false, toolsUsed: finalToolsUsed, toolResultsData: finalToolResults }
+                  : m
+              )
+            );
+          }
+
+          if (event.proposal) {
+            // An AI-proposed write action: attach its approval card to this reply
+            const proposal = event.proposal as ActionView;
+            setMessages(prev =>
+              prev.map(m =>
+                m.id === streamingMsgId
+                  ? { ...m, proposals: [...(m.proposals ?? []).filter(p => p.id !== proposal.id), proposal] }
                   : m
               )
             );
@@ -596,6 +645,18 @@ const AIChatWidget = forwardRef<{ sendExternalMessage: (text: string) => void },
                             </ReactMarkdown>
                           ) : null}
                         </div>
+
+                        {msg.proposals && msg.proposals.length > 0 && (
+                          <div className="mt-2 space-y-2">
+                            {msg.proposals.map(p => (
+                              <ProposalCard
+                                key={p.id}
+                                action={p}
+                                onResolved={view => handleProposalResolved(msg.id, view)}
+                              />
+                            ))}
+                          </div>
+                        )}
 
                         {!msg.isStreaming && msg.toolResultsData && (
                           <div className="mt-2 space-y-2">

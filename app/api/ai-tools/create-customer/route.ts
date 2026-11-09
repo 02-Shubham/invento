@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCurrentUser, successResponse, errorResponse } from "@/lib/api-helpers";
 import { validatePhone, validateEmail } from "@/lib/validation";
-import { firestoreService } from "@/lib/firestore-service";
+import { adminService } from "@/lib/admin-service";
 import { CreateCustomerRequest, CreateCustomerResult, CustomerResult } from "@/types/ai-tools";
 
 export async function POST(req: NextRequest) {
@@ -31,7 +31,7 @@ export async function POST(req: NextRequest) {
     */
 
     // Check existing
-    const allCustomers = await firestoreService.getCustomers(user);
+    const allCustomers = await adminService.getCustomers(user);
     const existing = allCustomers.find(c => 
         (c.phone === phone) || (email && c.email?.toLowerCase() === email.toLowerCase())
     );
@@ -56,7 +56,7 @@ export async function POST(req: NextRequest) {
         totalSpent: 0
     };
 
-    const newId = await firestoreService.addCustomer(newCustomerData, user);
+    const newId = await adminService.addCustomer(newCustomerData, user);
 
     return successResponse<CreateCustomerResult>({
         id: newId,

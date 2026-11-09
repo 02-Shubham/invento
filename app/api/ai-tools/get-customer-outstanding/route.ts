@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCurrentUser, successResponse, errorResponse } from "@/lib/api-helpers";
-import { firestoreService } from "@/lib/firestore-service";
+import { adminService } from "@/lib/admin-service";
 import { GetCustomerOutstandingRequest, CustomerOutstandingResult, OutstandingInvoiceInfo } from "@/types/ai-tools";
 
 export async function POST(req: NextRequest) {
@@ -17,13 +17,13 @@ export async function POST(req: NextRequest) {
         return errorResponse("Customer ID is required");
     }
 
-    const customer = await firestoreService.getCustomerById(customerId, user);
+    const customer = await adminService.getCustomerById(customerId, user);
     if (!customer) {
         return errorResponse("Customer not found", 404);
     }
 
     // Get unpaid invoices
-    const allInvoices = await firestoreService.getInvoices(user);
+    const allInvoices = await adminService.getInvoices(user);
     const customerInvoices = allInvoices.filter(inv => 
         inv.customerId === customerId && 
         (inv.balanceAmount ?? inv.total) > 0.01 // Positive balance

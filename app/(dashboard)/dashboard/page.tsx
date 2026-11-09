@@ -18,7 +18,7 @@ import {
     Pie,
     Cell
 } from 'recharts';
-import { cn } from "@/lib/utils";
+import { cn, formatCurrency } from "@/lib/utils";
 import { useEffect, useState } from "react";
 import { firestoreService } from "@/lib/firestore-service";
 import { Product, Invoice } from "@/types";
@@ -103,14 +103,6 @@ export default function DashboardPage() {
   // Add simplified mock trend if empty so it looks good initially
   if (chartData.length === 0) {
       chartData.push({ name: 'Jan 1', income: 4000 }, { name: 'Jan 2', income: 3000 }, { name: 'Jan 3', income: 5000 }, { name: 'Jan 4', income: 4500 });
-  }
-
-  // --- Helper for Currency ---
-  const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat("en-US", { 
-        style: "currency", 
-        currency: settings?.currency || "USD" 
-    }).format(amount);
   }
 
   // --- Components ---

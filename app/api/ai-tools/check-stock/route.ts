@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCurrentUser, successResponse, errorResponse } from "@/lib/api-helpers";
-import { firestoreService } from "@/lib/firestore-service";
+import { adminService } from "@/lib/admin-service";
 import { CheckStockRequest, StockCheckResult } from "@/types/ai-tools";
 
 export async function POST(req: NextRequest) {
@@ -17,7 +17,7 @@ export async function POST(req: NextRequest) {
       return errorResponse("Valid Product ID and Quantity Needed are required");
     }
 
-    const product = await firestoreService.getProductById(productId, user);
+    const product = await adminService.getProductById(productId, user);
 
     if (!product) {
         return errorResponse("Product not found", 404);

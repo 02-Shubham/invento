@@ -1,8 +1,12 @@
-import { firestoreService } from "@/lib/firestore-service";
+import { adminService } from "@/lib/admin-service";
 import OpenAI from "openai";
 import Groq from "groq-sdk";
 import { UserSettings } from "@/types";
 import { AI_TOOLS } from './ai-tools-schema';
+
+// Groq retires models from time to time (llama-3.3-70b-versatile is gone).
+// Override with GROQ_MODEL in .env; see https://console.groq.com/docs/models
+const GROQ_MODEL = process.env.GROQ_MODEL || 'openai/gpt-oss-120b';
 
 interface ChatMessage {
   role: "user" | "assistant" | "system" | "tool";
@@ -29,15 +33,24 @@ You have access to real business functions you can execute.
 - search_products: Search products by name/SKU
 - search_customers: Search customers by name/email/phone
 - get_customers_with_pending_payments: List customers with outstanding balances
-- create_invoice: Create a new invoice for a customer (requires customerId and items)
-- adjust_stock: Adjust the stock of a product (positive to add, negative to subtract)
 - get_revenue_report: Get sales and revenue summaries for any period
 - get_low_stock_products: Get low-stock items below a threshold (default 10)
+- create_invoice: PROPOSE a new invoice for a customer (requires customerId and items)
+- adjust_stock: PROPOSE a stock change for a product (positive to add, negative to subtract)
+- add_product: PROPOSE adding a new product (requires name and price)
+
+**Approval Rule (very important):**
+create_invoice, adjust_stock and add_product do NOT execute. They only prepare a proposal that the owner sees as a card with Approve and Reject buttons. Nothing is created or changed until the owner approves.
+- After calling one of them, say briefly what you prepared and ask the owner to review and approve it on the card. Never say it is done, created, saved or updated.
+- Do not call the same tool again for the same request, and propose at most ONE such action per reply.
+- If the owner wants a change, they will reject the card and tell you; then prepare a new proposal.
+- When the owner's later message says an action was approved or rejected, treat that as fact.
+- Reading tools (search_*, get_*) run immediately and need no approval.
 
 **How to Use Tools:**
 - When users ask about products, stock, or inventory, use search_products or get_low_stock_products
 - When users ask to create an invoice or bill, use search_customers to find the customerId and search_products to find the productIds first. Once you have both, call create_invoice.
-- Always call tools when you can provide real data or perform transactions rather than generic answers.
+- Always call tools when you can provide real data or prepare a requested change rather than giving generic answers.
 - After getting tool results, present information clearly to the user.
 - If a tool fails, explain the error and suggest alternatives.
 
@@ -56,7 +69,7 @@ You have access to real business functions you can execute.
 **Current Context:**
 - Date: ${new Date().toLocaleDateString()}
 
-Remember: You're not just answering questions - you're taking actions to help run their business.`;
+Remember: you do the legwork (searching, checking stock, preparing documents) and the owner makes the final call on anything that changes their books.`;
 
 export type AIResponse = 
   | { type: "text"; content: string }
@@ -65,7 +78,7 @@ export type AIResponse =
 // ── Helper: build provider-agnostic client & settings ────────────────────────
 
 async function resolveProvider(userId: string) {
-  const settings = await firestoreService.getUserSettings(userId) as UserSettings;
+  const settings = await adminService.getUserSettings(userId) as UserSettings;
   if (!settings) throw new Error("SETTINGS_NOT_FOUND");
   const rawProvider = settings.aiProvider || 'groq';
   const provider = rawProvider === 'google' ? 'groq' : rawProvider;
@@ -130,7 +143,7 @@ export async function sendChatMessage(options: ChatOptions): Promise<AIResponse>
     const apiKey = process.env.GROQ_API_KEY;
     if (!apiKey) throw new Error("GROQ_KEY_MISSING");
     const client = new Groq({ apiKey });
-    const model = 'llama-3.3-70b-versatile';
+    const model = GROQ_MODEL;
 
     try {
       const response = await client.chat.completions.create({
@@ -234,7 +247,7 @@ export async function* sendChatMessageStream(options: ChatOptions): AsyncGenerat
     const apiKey = process.env.GROQ_API_KEY;
     if (!apiKey) throw new Error("GROQ_KEY_MISSING");
     const client = new Groq({ apiKey });
-    const model = 'llama-3.3-70b-versatile';
+    const model = GROQ_MODEL;
 
     try {
       const stream = await client.chat.completions.create({

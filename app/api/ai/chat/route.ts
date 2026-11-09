@@ -17,7 +17,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCurrentUser, errorResponse } from "@/lib/api-helpers";
 import { sendChatMessage, sendChatMessageStream } from "@/lib/ai-client";
-import { executeToolFunction } from "@/lib/tool-executor";
+import { executeToolFunction, isWriteTool } from "@/lib/tool-executor";
 
 const MAX_TOOL_ROUNDS = 5;
 
@@ -77,7 +77,8 @@ function getToolSummary(toolName: string, result: any): string {
   if (!result || !result.success) return "Failed";
   const data = result.data;
   if (!data) return "Done";
-  
+  if (data.status === "pending_approval") return "Prepared — waiting for your approval";
+
   switch (toolName) {
     case "search_products":
       return `Found ${data.count || data.products?.length || 0} products`;
@@ -86,7 +87,7 @@ function getToolSummary(toolName: string, result: any): string {
     case "get_customers_with_pending_payments":
       return `Found ${data.count || data.customers?.length || 0} outstanding accounts`;
     case "create_invoice":
-      return `Created ${data.invoiceNumber} (${data.itemsCount} items, Total: $${data.totalAmount})`;
+      return `Created ${data.invoiceNumber} (${data.itemsCount} items)`;
     case "adjust_stock":
       return `Adjusted stock by ${data.quantityAdjusted} (New stock: ${data.newStockLevel})`;
     case "get_revenue_report":
@@ -123,8 +124,12 @@ export async function POST(req: NextRequest) {
   console.log(`[ChatAPI] user:${userId} | msg:"${String(message).substring(0, 60)}…"`);
 
   // ── Build initial messages array ──────────────────────────────────────────
-  const history = Array.isArray(conversationHistory) ? conversationHistory : [];
-  let messages: any[] = [...history, { role: "user", content: message }];
+  // The browser supplies the history, so accept only plain user/assistant text.
+  // Anything else (system/tool roles, forged tool_calls) is dropped.
+  const history = (Array.isArray(conversationHistory) ? conversationHistory : [])
+    .filter((m: any) => m && (m.role === "user" || m.role === "assistant") && typeof m.content === "string")
+    .map((m: any) => ({ role: m.role, content: m.content }));
+  let messages: any[] = [...history, { role: "user", content: String(message) }];
 
   const allToolsUsed: string[] = [];
   const allToolResults: Record<string, any> = {};
@@ -135,6 +140,9 @@ export async function POST(req: NextRequest) {
         let currentMessages = [...messages];
         let loopDirectText: string | null = null;
         let loopToolCallsHappened = false;
+        // At most one write proposal per turn: a second write would often depend on
+        // the first having happened (e.g. invoice a product that isn't created yet).
+        let writeProposedThisTurn = false;
 
         // ── Agentic tool loop (non-streaming internally, streamed to client) ────
         for (let round = 0; round < MAX_TOOL_ROUNDS; round++) {
@@ -163,9 +171,22 @@ export async function POST(req: NextRequest) {
               // Enqueue "running" status update
               controller.enqueue(sseEvent({ step: { tool: toolCall.name, status: "running" } }));
 
-              const result = await executeToolFunction(toolCall.name, toolCall.input, userId);
-              
-              if (result.success && result.data) {
+              let result: Awaited<ReturnType<typeof executeToolFunction>>;
+              if (isWriteTool(toolCall.name) && writeProposedThisTurn) {
+                result = {
+                  success: false,
+                  error:
+                    "Only one write action can be proposed at a time. Tell the user to review and approve the pending action first, then ask for the next step.",
+                };
+              } else {
+                result = await executeToolFunction(toolCall.name, toolCall.input, userId);
+              }
+
+              if (result.proposal) {
+                writeProposedThisTurn = true;
+                // Send the approval card to the UI right away
+                controller.enqueue(sseEvent({ proposal: result.proposal }));
+              } else if (result.success && result.data && !isWriteTool(toolCall.name)) {
                 allToolResults[toolCall.name] = result.data;
               }
 
@@ -173,7 +194,9 @@ export async function POST(req: NextRequest) {
               const summary = getToolSummary(toolCall.name, result);
               controller.enqueue(sseEvent({ step: { tool: toolCall.name, status: "done", summary } }));
 
-              toolResults.push({ role: "tool", tool_call_id: toolCall.id, content: JSON.stringify(result) });
+              // The model gets the outcome only; the UI-only proposal view stays out of its context
+              const { proposal: _uiOnly, ...forModel } = result;
+              toolResults.push({ role: "tool", tool_call_id: toolCall.id, content: JSON.stringify(forModel) });
             }
 
             currentMessages = [

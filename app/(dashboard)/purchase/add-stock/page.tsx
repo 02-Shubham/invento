@@ -36,8 +36,9 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { toast } from "sonner";
 import { firestoreService } from "@/lib/firestore-service";
 import { useAuth } from "@/lib/auth-context";
+import { formatCurrency, currencySymbol } from "@/lib/utils";
 import { Product, TransactionType } from "@/types";
-import { collection, onSnapshot, query } from "firebase/firestore";
+import { collection, onSnapshot, query, where } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 
 const stockConfigSchema = z.object({
@@ -74,16 +75,21 @@ export default function AddStockPage() {
   const quantityInput = form.watch("quantity") || "";
 
   useEffect(() => {
-    const q = query(collection(db, "products"));
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const prods = snapshot.docs.map((doc) => ({
-        id: doc.id,
-        ...doc.data(),
-      })) as Product[];
-      setProducts(prods);
-    });
+    if (!user) return;
+    const q = query(collection(db, "products"), where("userId", "==", user.uid));
+    const unsubscribe = onSnapshot(
+      q,
+      (snapshot) => {
+        const prods = snapshot.docs.map((doc) => ({
+          id: doc.id,
+          ...doc.data(),
+        })) as Product[];
+        setProducts(prods);
+      },
+      (error) => console.error("Failed to load products:", error)
+    );
     return () => unsubscribe();
-  }, []);
+  }, [user]);
 
   const handleProductChange = (productId: string) => {
       const product = products.find(p => p.id === productId) || null;
@@ -274,7 +280,7 @@ export default function AddStockPage() {
                                     name="unitCost"
                                     render={({ field }) => (
                                         <FormItem>
-                                            <FormLabel>Unit Cost (₹)</FormLabel>
+                                            <FormLabel>Unit Cost ({currencySymbol()})</FormLabel>
                                             <FormControl>
                                                 <Input type="number" placeholder="Optional" {...field} />
                                             </FormControl>
@@ -368,15 +374,15 @@ export default function AddStockPage() {
                          <div className="space-y-2 pt-4">
                              <div className="flex justify-between items-center">
                                 <span className="text-muted-foreground">Current Avg Cost</span>
-                                <span>₹ {currentAvgCost.toFixed(2)}</span>
+                                <span>{formatCurrency(currentAvgCost)}</span>
                             </div>
                             <div className="flex justify-between items-center text-blue-600">
                                 <span>Addition Unit Cost</span>
-                                <span>₹ {addCost.toFixed(2)}</span>
+                                <span>{formatCurrency(addCost)}</span>
                             </div>
                             <div className="flex justify-between items-center border-t pt-2 font-bold">
                                 <span>New Avg Cost (Est.)</span>
-                                <span>₹ {estimatedNewAvgCost.toFixed(2)}</span>
+                                <span>{formatCurrency(estimatedNewAvgCost)}</span>
                             </div>
                         </div>
                         

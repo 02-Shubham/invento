@@ -206,11 +206,12 @@ export function VoiceProvider({ children }: { children: ReactNode }) {
       setPartialText("");
 
       try {
+        const idToken = await user.getIdToken();
         const response = await fetch("/api/ai/voice", {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
-            "x-user-id": user.uid,
+            Authorization: `Bearer ${idToken}`,
           },
           body: JSON.stringify({
             text,

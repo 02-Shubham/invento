@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCurrentUser, successResponse, errorResponse } from "@/lib/api-helpers";
-import { firestoreService } from "@/lib/firestore-service";
+import { adminService } from "@/lib/admin-service";
 import { RecordPaymentRequest, RecordPaymentResult } from "@/types/ai-tools";
 import { distributePayment } from "@/lib/payment-utils";
 
@@ -18,13 +18,13 @@ export async function POST(req: NextRequest) {
       return errorResponse("Customer ID and positive Amount are required");
     }
 
-    const customer = await firestoreService.getCustomerById(customerId, user);
+    const customer = await adminService.getCustomerById(customerId, user);
     if (!customer) {
         return errorResponse("Customer not found", 404);
     }
 
     // 1. Fetch Invoices to Apply To
-    const allInvoices = await firestoreService.getInvoices(user);
+    const allInvoices = await adminService.getInvoices(user);
     // Filter for customer and status
     let eligibleInvoices = allInvoices.filter(inv => 
         inv.customerId === customerId && 
@@ -63,8 +63,8 @@ export async function POST(req: NextRequest) {
     };
 
     // Use service to record payment transactionally
-    // firestoreService.addPayment handles: Payment creation, Invoice updates, Customer stats updates.
-    const paymentId = await firestoreService.addPayment(paymentData, user);
+    // adminService.addPayment handles: Payment creation, Invoice updates, Customer stats updates.
+    const paymentId = await adminService.addPayment(paymentData, user);
 
     // 4. Construct Result
     // We need to return what happened.

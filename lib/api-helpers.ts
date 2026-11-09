@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { adminAuth } from "@/lib/firebase-admin";
 
 // Standard success response
 export function successResponse<T>(data: T, message?: string) {
@@ -24,26 +25,25 @@ export function errorResponse(message: string, status: number = 400, errorDetail
   );
 }
 
-// This is a placeholder. In a real app with NextAuth/Clerk/Firebase Auth,
-// you would get the session here.
-// For now, since we are using firebase client SDK in the frontend,
-// the API routes usually verify the ID token passed in the Authorization header.
-// However, adhering to the plan which assumes we can get the user.
-// We will look for a simple header "x-user-id" for testing simplicity if no proper auth middleware exists,
-// OR ideally we should use `firebase-admin` to verify the token.
-// 
-// Given the existing codebase uses `lib/firebase.ts` (client sdk) and `lib/firestore-service.ts`,
-// checking if there's any server-side auth set up.
-// If not, we might need a workaround for these API routes or assume the AI sends a simulated User ID header for now.
-//
-// Update: The prompt says "Get current authenticated user ID".
-// We will try to extract it from headers.
+/**
+ * Returns the verified Firebase UID for the request, or null.
+ *
+ * The client must send `Authorization: Bearer <Firebase ID token>`.
+ * The token's signature, expiry and audience are verified by the Admin SDK;
+ * nothing the client sends other than a valid token is trusted.
+ */
 export async function getCurrentUser(request: Request): Promise<string | null> {
-    const userId = request.headers.get("x-user-id");
-    // In a production app, verify Bearer token here using firebase-admin
-    if (userId) return userId;
-    
-    return null; 
+    const header = request.headers.get("authorization");
+    const match = header?.match(/^Bearer\s+(.+)$/i);
+    if (!match) return null;
+
+    try {
+        const decoded = await adminAuth().verifyIdToken(match[1]);
+        return decoded.uid;
+    } catch (error) {
+        console.warn("[Auth] ID token verification failed:", (error as Error).message);
+        return null;
+    }
 }
 
 // Verify resource ownership generic helper

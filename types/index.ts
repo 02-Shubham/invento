@@ -184,6 +184,19 @@ export interface Supplier {
     updatedAt?: Date;
 }
 
+/**
+ * The signed-in user's own business details, as saved in Settings → Profile.
+ * Safe to expose to the UI (never includes API keys). Empty strings when not set.
+ */
+export interface BusinessProfile {
+  businessName: string;
+  businessAddress: string;
+  businessEmail: string;
+  businessPhone: string;
+  /** GSTIN / VAT / tax registration number */
+  taxId: string;
+}
+
 // --- AI User Settings ---
 
 export interface UserSettings {
@@ -197,6 +210,8 @@ export interface UserSettings {
   // Tax rate applied to invoices (0–100, as a percentage). E.g. 18 = 18% GST.
   // Defaults to 0 if not configured.
   taxRate?: number;
+  // ISO currency code chosen in onboarding / settings (INR, USD, EUR, GBP, JPY, AUD, CAD).
+  currency?: string;
   onboardingDismissed?: boolean;
   updatedAt?: Date;
 }

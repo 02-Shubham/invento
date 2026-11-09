@@ -1,6 +1,5 @@
 "use client";
 
-import { useStore } from "@/lib/store";
 import { useParams, useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -29,8 +28,8 @@ import { useAuth } from "@/lib/auth-context";
 export default function InvoiceDetailPage() {
   const { id } = useParams();
   const router = useRouter();
-  const { settings } = useStore(); // Keep settings from store for PDF
-  const { user } = useAuth();
+  // The signed-in user's own business details (Settings → Profile)
+  const { user, businessProfile } = useAuth();
   
   const [invoice, setInvoice] = useState<Invoice | null>(null);
   const [payments, setPayments] = useState<Payment[]>([]);
@@ -137,7 +136,7 @@ export default function InvoiceDetailPage() {
             </Button>
             
             <PDFDownloadLink
-                document={<InvoicePDF invoice={invoice} settings={settings} />}
+                document={<InvoicePDF invoice={invoice} business={businessProfile} />}
                 fileName={`invoice-${invoice.invoiceNumber}.pdf`}
                 className="flex-1 sm:flex-initial"
             >
@@ -162,10 +161,13 @@ export default function InvoiceDetailPage() {
                     <div>
                         <h3 className="font-semibold text-sm text-muted-foreground">From</h3>
                          <div className="mt-1">
-                            <p className="font-medium">{settings?.businessName || "Your Company"}</p>
-                            <p className="text-sm text-muted-foreground whitespace-pre-line">{settings?.businessAddress}</p>
-                            <p className="text-sm text-muted-foreground">{settings?.businessEmail}</p>
-                            <p className="text-sm text-muted-foreground">{settings?.businessPhone}</p>
+                            <p className="font-medium">{businessProfile.businessName || "Your Business"}</p>
+                            <p className="text-sm text-muted-foreground whitespace-pre-line">{businessProfile.businessAddress}</p>
+                            <p className="text-sm text-muted-foreground">{businessProfile.businessEmail}</p>
+                            <p className="text-sm text-muted-foreground">{businessProfile.businessPhone}</p>
+                            {businessProfile.taxId && (
+                              <p className="text-sm text-muted-foreground">Tax ID: {businessProfile.taxId}</p>
+                            )}
                          </div>
                     </div>
                     <div>
@@ -189,7 +191,15 @@ export default function InvoiceDetailPage() {
                     </div>
                      <div>
                         <h3 className="font-semibold text-sm text-muted-foreground">Terms</h3>
-                        <p>{settings?.defaultPaymentTerms || "Due on Receipt"}</p>
+                        <p>
+                          {(() => {
+                            // Derived from the invoice's own dates (invoices are created with a due date)
+                            const days = Math.round(
+                              (new Date(invoice.dueDate).getTime() - new Date(invoice.createdAt).getTime()) / 86_400_000
+                            );
+                            return days > 0 ? `Net ${days}` : "Due on Receipt";
+                          })()}
+                        </p>
                     </div>
                 </div>
             </CardContent>

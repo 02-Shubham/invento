@@ -20,6 +20,7 @@ import { Product } from "@/types";
 import { Plus, Trash, Check, ChevronsUpDown, Loader2, PlusCircle } from "lucide-react";
 import { collection, onSnapshot, query, where } from "firebase/firestore";
 import { db } from "@/lib/firebase";
+import { useAuth } from "@/lib/auth-context";
 import { formatCurrency, cn } from "@/lib/utils";
 import {
   Command,
@@ -57,6 +58,7 @@ export function PurchaseOrderForm({
     onSubmit: (data: PurchaseOrderFormValues) => void;
     isLoading?: boolean;
 }) {
+    const { user } = useAuth();
     const [products, setProducts] = useState<Product[]>([]);
     const [isProductDialogOpen, setIsProductDialogOpen] = useState(false);
     const [activeItemIndex, setActiveItemIndex] = useState<number | null>(null);
@@ -79,13 +81,22 @@ export function PurchaseOrderForm({
 
     // Fetch Products (Purchasable only)
     useEffect(() => {
-        const q = query(collection(db, "products"), where("canBePurchased", "==", true));
-        const unsubscribe = onSnapshot(q, (snapshot) => {
-            const prods = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Product));
-            setProducts(prods);
-        });
+        if (!user) return;
+        const q = query(
+            collection(db, "products"),
+            where("userId", "==", user.uid),
+            where("canBePurchased", "==", true)
+        );
+        const unsubscribe = onSnapshot(
+            q,
+            (snapshot) => {
+                const prods = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Product));
+                setProducts(prods);
+            },
+            (error) => console.error("Failed to load purchasable products:", error)
+        );
         return () => unsubscribe();
-    }, []);
+    }, [user]);
 
     const calculateTotal = () => {
         const items = form.watch("items");
