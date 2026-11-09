@@ -279,14 +279,14 @@ export const openApiSpec = {
         tags: ["Products & Stock"],
         summary: "Add stock to a product",
         description: [
-          "Increases a product's `stockQuantity`.",
+          "Adds stock to a product in one atomic transaction:",
+          "- increases `stockQuantity`;",
+          "- if `unitCost` is given, recalculates the weighted-average cost (`averageCost`), `lastCost` and `totalValue`;",
+          "- writes an `inventory_transactions` record (before/after stock, notes) and returns its real id as `transactionId`.",
           "",
-          "**Current behaviour to be aware of:**",
-          "- If `unitCost` is given, the product's selling `price` is overwritten with a weighted value. It does **not** update `averageCost`.",
-          "- No `inventory_transactions` record is written; `transactionId` is a placeholder (`txn_<timestamp>`).",
-          "- `source` and `notes` are accepted but not stored.",
+          "The product's **selling price is never changed**.",
           "",
-          "For a fully audited stock movement use the web app (Purchase → Add Stock) or the chat assistant's `adjust_stock` tool.",
+          "`source` maps to the ledger type: `production` → production, `return` → customer return, `adjustment` (default) → adjustment.",
         ].join("\n"),
         requestBody: jsonBody(
           {
@@ -304,7 +304,7 @@ export const openApiSpec = {
         ),
         responses: {
           "200": ok("Stock updated", { $ref: "#/components/schemas/AddStockResult" }),
-          "400": errorRef("Missing productId, or quantity not positive"),
+          "400": errorRef("Missing productId, quantity not positive, or invalid unitCost"),
           "404": errorRef("Product not found"),
           ...stdErrors,
         },
@@ -623,7 +623,7 @@ export const openApiSpec = {
           productName: { type: "string" },
           quantityAdded: { type: "number" },
           newStockLevel: { type: "number" },
-          transactionId: { type: "string", description: "Placeholder; no transaction document is written" },
+          transactionId: { type: "string", description: "Id of the inventory_transactions record" },
         },
       },
       CreateCustomerResult: {

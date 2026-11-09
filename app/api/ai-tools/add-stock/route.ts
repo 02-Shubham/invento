@@ -17,45 +17,42 @@ export async function POST(req: NextRequest) {
         return errorResponse("Product ID and positive Quantity are required");
     }
 
+    if (unitCost !== undefined && (typeof unitCost !== "number" || unitCost < 0)) {
+        return errorResponse("unitCost must be a non-negative number");
+    }
+
     const product = await adminService.getProductById(productId, user);
     if (!product) {
         return errorResponse("Product not found", 404);
     }
 
-    // Update Stock
-    // Reusing updateProduct for simplicity as firestoreService doesn't have `addStock` specifically logic exposed cleanly yet
-    // apart from `updateProduct` which updates the doc.
-    // Ideally we'd log a transaction (InventoryMovement), but for this MVP tool we just update the quantity.
-    
-    const newStock = (product.stockQuantity || 0) + quantity;
-    
-    // Calculate new average cost if unitCost provided
-    let updates: any = { stockQuantity: newStock };
-    
-    if (unitCost) {
-        // Simple weighted average
-        const currentTotalValue = (product.stockQuantity || 0) * (product.price || 0); // Assuming costPrice exists? 
-        // Product type has `costPrice`.
-        const newTotalValue = currentTotalValue + (quantity * unitCost);
-        const newAvgCost = newTotalValue / newStock;
-        updates.price = newAvgCost; 
-    }
+    // Map the API's `source` onto the inventory ledger's transaction types.
+    const transactionType =
+        source === "production" ? "production" :
+        source === "return" ? "return_customer" :
+        "adjustment";
 
-    await adminService.updateProduct(productId, updates, user);
+    // One atomic transaction: updates stockQuantity, the weighted-average cost
+    // (when unitCost is given) and writes an inventory_transactions record.
+    // The selling price is never modified.
+    const transactionId = await adminService.addInventoryTransaction({
+        productId,
+        productName: product.name,
+        sku: product.sku,
+        transactionType,
+        quantity, // positive = stock in
+        unitCost,
+        referenceType: "Manual",
+        notes: notes || `Stock added via API (${source || "adjustment"})`,
+    }, user);
 
-    // TODO: Create Inventory Transaction Record (Optional but recommended)
-    // skipping for now to keep it simple as per prompt instructions which emphasized "Update product stockQuantity" 
-    // and "Create inventory transaction record".
-    // I should probably do it if requested. The prompt says "Create inventory transaction record".
-    // I'll assume standard logging is implied but I don't have a transaction collection readily available.
-    // I will skip the explicit transaction Log record for now unless I see a collection for it. I saw `getInvoices`, `getCustomers`, `getProducts`.
-    // I'll stick to updating the product.
+    const updated = await adminService.getProductById(productId, user);
 
     const result: AddStockResult = {
         productName: product.name,
         quantityAdded: quantity,
-        newStockLevel: newStock,
-        transactionId: `txn_${Date.now()}` // Mock ID since we didn't save a real txn doc
+        newStockLevel: updated?.stockQuantity ?? (product.stockQuantity || 0) + quantity,
+        transactionId,
     };
 
     return successResponse(result);
