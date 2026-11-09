@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
-import { Settings, User, Key, CreditCard } from "lucide-react";
+import { Settings, User, Key, CreditCard, MessageCircle } from "lucide-react";
 
 const settingsRoutes = [
   {
@@ -15,6 +15,11 @@ const settingsRoutes = [
     label: "API Keys",
     href: "/settings/api-keys",
     icon: Key,
+  },
+  {
+    label: "WhatsApp",
+    href: "/settings/whatsapp",
+    icon: MessageCircle,
   },
   {
     label: "Account",
