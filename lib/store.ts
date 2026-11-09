@@ -215,10 +215,12 @@ export const useStore = create<AppState>()(
         
       // Settings Actions
       settings: {
-        businessName: "Shubham Bags",
-        businessAddress: "Powai, Mumbai",
-        businessEmail: "shubham@shubhambags.com",
-        businessPhone: "8850502975",
+        // Neutral placeholders: the real business details live in user_settings
+        // (see useAuth().businessProfile). Never ship a real person's details here.
+        businessName: "",
+        businessAddress: "",
+        businessEmail: "",
+        businessPhone: "",
         taxRate: 18,
         currency: "INR",
         invoicePrefix: "INV-",

@@ -1,5 +1,5 @@
 import { Page, Text, View, Document, StyleSheet } from '@react-pdf/renderer';
-import { Invoice } from '@/types';
+import { Invoice, BusinessProfile } from '@/types';
 import { format } from 'date-fns';
 import { formatMoney } from '@/lib/utils';
 
@@ -94,10 +94,11 @@ const styles = StyleSheet.create({
 
 interface InvoicePDFProps {
   invoice: Invoice;
-  settings: any; // Using any for simplicity here to avoid re-declaring Settings interface type or importing it, but strictly it should be Settings
+  /** The signed-in user's own business details (Settings → Profile). */
+  business: BusinessProfile;
 }
 
-export const InvoicePDF = ({ invoice, settings }: InvoicePDFProps) => {
+export const InvoicePDF = ({ invoice, business }: InvoicePDFProps) => {
     // Uses the user's saved currency; ASCII-safe because the PDF's built-in font has no ₹ glyph
     const formatCurrency = (amount: number) => formatMoney(amount, undefined, { asciiSafe: true });
   
@@ -117,10 +118,12 @@ export const InvoicePDF = ({ invoice, settings }: InvoicePDFProps) => {
           <Text style={styles.label}>Status: {(invoice.status || 'pending').toUpperCase()}</Text>
         </View>
         <View style={styles.companyInfo}>
-          <Text style={{ fontWeight: 'bold' }}>{settings?.businessName || "Shubham Bags"}</Text>
-          <Text>{settings?.businessAddress || "Powai, Mumbai"}</Text>
-          <Text>{settings?.businessEmail || "shubham@shubhambags.com"}</Text>
-          <Text>{settings?.businessPhone || "8850502975"}</Text>
+          {/* Only this user's own details; no placeholder identity for missing fields */}
+          <Text style={{ fontWeight: 'bold' }}>{business?.businessName || "Your Business"}</Text>
+          {business?.businessAddress ? <Text>{business.businessAddress}</Text> : null}
+          {business?.businessEmail ? <Text>{business.businessEmail}</Text> : null}
+          {business?.businessPhone ? <Text>{business.businessPhone}</Text> : null}
+          {business?.taxId ? <Text>Tax ID: {business.taxId}</Text> : null}
         </View>
       </View>
 

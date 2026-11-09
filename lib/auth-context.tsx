@@ -14,12 +14,35 @@ import { auth, db } from "./firebase";
 import { doc, setDoc, getDoc, onSnapshot, serverTimestamp } from "firebase/firestore";
 import { toast } from "sonner";
 import { DEFAULT_CURRENCY, getActiveCurrency, setActiveCurrency } from "./utils";
+import type { BusinessProfile } from "@/types";
+
+const EMPTY_PROFILE: BusinessProfile = {
+  businessName: "",
+  businessAddress: "",
+  businessEmail: "",
+  businessPhone: "",
+  taxId: "",
+};
+
+/** Pick only the business-identity fields from a user_settings document (never the AI key). */
+function toBusinessProfile(data: Record<string, any> | undefined): BusinessProfile {
+  const s = (v: unknown) => (typeof v === "string" ? v : "");
+  return {
+    businessName: s(data?.businessName),
+    businessAddress: s(data?.businessAddress),
+    businessEmail: s(data?.businessEmail),
+    businessPhone: s(data?.businessPhone),
+    taxId: s(data?.taxId),
+  };
+}
 
 interface AuthContextType {
   user: User | null;
   loading: boolean;
   /** The user's saved currency code (e.g. "INR"). Consumers re-render when it changes. */
   currency: string;
+  /** The user's own business details (Settings → Profile), live. Empty strings until set. */
+  businessProfile: BusinessProfile;
   signIn: (email: string, password: string) => Promise<void>;
   signUp: (email: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
@@ -32,13 +55,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
   const [currency, setCurrency] = useState<string>(DEFAULT_CURRENCY);
+  const [businessProfile, setBusinessProfile] = useState<BusinessProfile>(EMPTY_PROFILE);
 
-  // Keep the formatter's currency in sync with the user's saved setting, live.
-  // The last known value is cached per user so a page reload doesn't flash the default.
+  // Keep the formatter's currency and the business profile in sync with the user's
+  // saved settings, live. The last known currency is cached per user so a page
+  // reload doesn't flash the default.
   useEffect(() => {
     if (!user) {
       setActiveCurrency(DEFAULT_CURRENCY);
       setCurrency(DEFAULT_CURRENCY);
+      setBusinessProfile(EMPTY_PROFILE); // never keep the previous user's details
       return;
     }
 
@@ -60,6 +86,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setActiveCurrency(snap.data()?.currency);
         const active = getActiveCurrency();
         setCurrency(active);
+        setBusinessProfile(toBusinessProfile(snap.data()));
         try {
           localStorage.setItem(cacheKey, active);
         } catch {
@@ -187,7 +214,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   return (
-    <AuthContext.Provider value={{ user, loading, currency, signIn, signUp, logout, signInWithGoogle }}>
+    <AuthContext.Provider value={{ user, loading, currency, businessProfile, signIn, signUp, logout, signInWithGoogle }}>
       {children}
     </AuthContext.Provider>
   );
