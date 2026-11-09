@@ -74,6 +74,8 @@ export function CreateInvoiceForm() {
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [nextInvoiceNum, setNextInvoiceNum] = useState(1);
   const [isLoading, setIsLoading] = useState(true);
+  // Tax rate (%) from the user's saved settings — same source the AI invoice path uses
+  const [taxRatePct, setTaxRatePct] = useState(0);
 
   // Settings from store
   const { user } = useAuth(); // Get authenticated user
@@ -121,6 +123,11 @@ export function CreateInvoiceForm() {
              }
          }
 
+         // 3b. Tax rate from the user's settings (0 if unset)
+         const userSettings: any = await firestoreService.getUserSettings(user.uid);
+         const rate = Number(userSettings?.taxRate);
+         setTaxRatePct(Number.isFinite(rate) && rate > 0 ? rate : 0);
+
          // 4. Determine Next Invoice Num
          const invoices = await firestoreService.getInvoices(user.uid);
          setNextInvoiceNum(invoices.length + 1);
@@ -145,14 +152,14 @@ export function CreateInvoiceForm() {
       return acc + (product ? product.price * item.quantity : 0);
     }, 0);
     
-    // Tax system removed as per user request
-    const taxRate = 0;
-    const taxAmount = 0;
-    const total = subtotal; 
-    return { subtotal, taxAmount, total };
+    const round2 = (n: number) => Math.round((n + Number.EPSILON) * 100) / 100;
+    const roundedSubtotal = round2(subtotal);
+    const taxAmount = round2((roundedSubtotal * taxRatePct) / 100);
+    const total = round2(roundedSubtotal + taxAmount);
+    return { subtotal: roundedSubtotal, taxAmount, total };
   };
 
-  const { subtotal, total } = calculateTotals();
+  const { subtotal, taxAmount, total } = calculateTotals();
 
   const handleCustomerSelect = (customer: Customer) => {
       form.setValue("customerId", customer.id);
@@ -199,8 +206,9 @@ export function CreateInvoiceForm() {
             };
           }),
           subtotal,
-          taxRate: 0,
-          taxAmount: 0,
+          taxRate: taxRatePct,
+          taxAmount,
+          tax: taxAmount, // field the invoice page/PDF and AI-created invoices read
           total,
           status: 'pending',
           invoiceDate: data.invoiceDate,
@@ -569,6 +577,12 @@ export function CreateInvoiceForm() {
                                     <span className="text-muted-foreground">Subtotal</span>
                                     <span>{formatCurrency(subtotal)}</span>
                                 </div>
+                                {taxRatePct > 0 && (
+                                    <div className="flex justify-between">
+                                        <span className="text-muted-foreground">Tax ({taxRatePct}%)</span>
+                                        <span>{formatCurrency(taxAmount)}</span>
+                                    </div>
+                                )}
                                 <div className="flex justify-between font-bold text-lg pt-2 border-t">
                                     <span>Total</span>
                                     <span>{formatCurrency(total)}</span>

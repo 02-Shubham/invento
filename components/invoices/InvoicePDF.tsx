@@ -174,7 +174,12 @@ export const InvoicePDF = ({ invoice, business }: InvoicePDFProps) => {
           <Text>Subtotal:</Text>
           <Text>{formatCurrency(invoice.subtotal || invoice.total)}</Text>
         </View>
-        {/* Tax removed */}
+        {invoice.tax ? (
+          <View style={styles.totalRow}>
+            <Text>Tax:</Text>
+            <Text>{formatCurrency(invoice.tax)}</Text>
+          </View>
+        ) : null}
         <View style={[styles.totalRow, styles.grandTotal]}>
           <Text style={styles.totalLabel}>Total:</Text>
           <Text>{formatCurrency(invoice.total)}</Text>
